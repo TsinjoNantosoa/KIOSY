@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Identité Kiosy : papier ivoire, encre bleu nuit, vert profond, terracotta en accent rare.
+ * Contrastes vérifiés (WCAG AA) pour le texte : ink/paper ≈ 14:1, ink-muted/paper ≈ 7.3:1,
+ * ink-subtle/paper ≈ 4.9:1, brand/paper ≈ 7.4:1, warm/paper ≈ 4.8:1.
+ */
+@layer base {
+  :root {
+    --paper: 251 248 241;
+    --surface: 255 255 255;
+    --sunken: 243 239 230;
+    --line: 223 216 202;
+    --ink: 27 34 48;
+    --ink-muted: 74 82 99;
+    --ink-subtle: 98 105 120;
+    --brand: 31 93 76;
+    --brand-strong: 23 74 60;
+    --brand-soft: 227 239 233;
+    --warm: 166 74 36;
+    --warm-soft: 246 230 218;
+    --danger: 163 38 31;
+    --danger-soft: 251 233 231;
+    --caution: 122 80 0;
+    --caution-soft: 255 244 214;
+    --info: 30 78 140;
+    --info-soft: 230 238 250;
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 5rem;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-serif text-ink;
+    font-optical-sizing: auto;
+  }
+
+  :focus-visible {
+    outline: 3px solid rgb(var(--brand));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .kiosy-prose {
+    @apply space-y-4 text-[1.0625rem] leading-relaxed text-ink;
+  }
+  .kiosy-prose h2 {
+    @apply mt-8 text-2xl font-semibold;
+  }
+  .kiosy-prose h3 {
+    @apply mt-6 text-xl font-semibold;
+  }
+  .kiosy-prose h4 {
+    @apply mt-4 text-lg font-semibold;
+  }
+  .kiosy-prose ul {
+    @apply list-disc space-y-1 pl-6;
+  }
+  .kiosy-prose ol {
+    @apply list-decimal space-y-1 pl-6;
+  }
+  .kiosy-compact.kiosy-prose {
+    @apply space-y-2 text-[0.95rem];
+  }
+  .kiosy-compact.kiosy-prose h2,
+  .kiosy-compact.kiosy-prose h3 {
+    @apply mt-3 text-lg;
+  }
+
+  .card-surface {
+    @apply rounded-card border border-line bg-surface shadow-card;
+  }
+
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 360px;
+  }
+}

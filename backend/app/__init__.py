@@ -1,0 +1,2 @@
+"""Kiosy backend package."""
+

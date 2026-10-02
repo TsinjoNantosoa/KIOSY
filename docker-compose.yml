@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: kiosy
+      POSTGRES_USER: kiosy
+      POSTGRES_PASSWORD: kiosy-local-only
+    ports: ["5432:5432"]
+    volumes: ["kiosy_postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kiosy -d kiosy"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.3
+    ports: ["6333:6333"]
+    volumes: ["kiosy_qdrant:/qdrant/storage"]
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minio-local-only
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["kiosy_minio:/data"]
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
+    depends_on: [minio]
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["until mc alias set local http://minio:9000 minioadmin minio-local-only; do sleep 1; done; mc mb --ignore-existing local/kiosy-private; mc anonymous set none local/kiosy-private"]
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["1025:1025", "8025:8025"]
+
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      KIOSY_DATABASE_URL: postgresql+psycopg://kiosy:kiosy-local-only@postgres:5432/kiosy
+      KIOSY_STORAGE_ENDPOINT: http://minio:9000
+      KIOSY_QDRANT_URL: http://qdrant:6333
+      KIOSY_SMTP_HOST: mailpit
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      qdrant: { condition: service_started }
+
+  worker:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      KIOSY_DATABASE_URL: postgresql+psycopg://kiosy:kiosy-local-only@postgres:5432/kiosy
+      KIOSY_STORAGE_ENDPOINT: http://minio:9000
+      KIOSY_QDRANT_URL: http://qdrant:6333
+      KIOSY_SMTP_HOST: mailpit
+    command: python -m app.workers.runner
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      qdrant: { condition: service_started }
+
+volumes:
+  kiosy_postgres:
+  kiosy_qdrant:
+  kiosy_minio:
