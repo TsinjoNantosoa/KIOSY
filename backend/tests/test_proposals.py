@@ -3,6 +3,7 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+
 from app.core.security import utcnow
 from app.db.base import SessionLocal
 from app.db.models import Proposal, User

@@ -1,4 +1,3 @@
-import secrets
 
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy import select

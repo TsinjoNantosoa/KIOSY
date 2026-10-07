@@ -8,7 +8,8 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, rootDir, "");
-  const appMode = process.env.VITE_APP_MODE ?? env.VITE_APP_MODE ?? "demo";
+  // Les tests (mode "test") utilisent toujours la démo, même si .env active le mode api.
+  const appMode = mode === "test" ? "demo" : process.env.VITE_APP_MODE ?? env.VITE_APP_MODE ?? "demo";
   return ({
   plugins: [react()],
   resolve: {
