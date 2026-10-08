@@ -25,4 +25,3 @@ def install_error_handlers(app: FastAPI) -> None:
                 "request_id": getattr(request.state, "request_id", None),
             },
         )
-

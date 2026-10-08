@@ -1,5 +1,6 @@
 import asyncio
 import concurrent.futures
+import time
 from typing import Any
 
 from mcp import Client
@@ -23,29 +24,63 @@ def _run_async(coro: Any) -> Any:
 class KiosyMcpClients:
     """Real MCP client used by KIA specialists (in-process Streamable HTTP servers)."""
 
-    def __init__(self, user_id: str, trace_id: str, limits: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        user_id: str,
+        trace_id: str,
+        limits: dict[str, Any] | None = None,
+        *,
+        initial_tool_calls: int = 0,
+        active_started_at: float | None = None,
+        active_elapsed_seconds: float = 0.0,
+    ):
         self.user_id = user_id
         self.trace_id = trace_id
         self.limits = limits or {}
         self.max_tool_calls = int(self.limits.get("max_tool_calls", 12))
-        self.tool_calls = 0
+        self.tool_calls = initial_tool_calls
+        self.active_started_at = active_started_at or time.monotonic()
+        self.active_elapsed_seconds = active_elapsed_seconds
         self.invocations: list[dict[str, Any]] = []
 
-    async def _call_tool(self, server: MCPServer, audience: str, scopes: list[str], tool: str, arguments: dict[str, Any]) -> Any:
+    async def _call_tool(
+        self, server: MCPServer, audience: str, scopes: list[str], tool: str, arguments: dict[str, Any]
+    ) -> Any:
+        timeout = float(self.limits.get("active_timeout_seconds", 120))
+        if self.active_elapsed_seconds + (time.monotonic() - self.active_started_at) >= timeout:
+            raise DomainError(429, "RUN_ACTIVE_TIMEOUT", "La durée active maximale du run est atteinte.")
         if self.tool_calls >= self.max_tool_calls:
             raise DomainError(429, "TOOL_BUDGET_EXCEEDED", "Limite d'appels d'outils atteinte pour ce run.")
-        token = issue_context(self.user_id, audience, scopes)
+        token = issue_context(self.user_id, audience, scopes, trace_id=self.trace_id)
         payload = {**arguments, "context_token": token}
         async with Client(server, raise_exceptions=True) as client:
             result = await client.call_tool(tool, payload)
         self.tool_calls += 1
+        tool_call_id = f"{self.trace_id}:{self.tool_calls}"
         if result.is_error:
             message = result.content[0].text if result.content else "MCP tool error"
-            self.invocations.append({"tool": tool, "audience": audience, "trace_id": self.trace_id, "status": "error", "message": message[:300]})
+            self.invocations.append(
+                {
+                    "tool": tool,
+                    "audience": audience,
+                    "trace_id": self.trace_id,
+                    "status": "error",
+                    "message": message[:300],
+                    "tool_call_id": tool_call_id,
+                }
+            )
             raise DomainError(502, "MCP_TOOL_FAILED", message)
         structured = result.structured_content or {}
         body = structured.get("result", structured)
-        self.invocations.append({"tool": tool, "audience": audience, "trace_id": self.trace_id, "status": "ok", "tool_call_id": f"{self.trace_id}:{self.tool_calls}"})
+        self.invocations.append(
+            {
+                "tool": tool,
+                "audience": audience,
+                "trace_id": self.trace_id,
+                "status": "ok",
+                "tool_call_id": tool_call_id,
+            }
+        )
         return body
 
     def call(self, server: MCPServer, audience: str, scopes: list[str], tool: str, **arguments: Any) -> Any:

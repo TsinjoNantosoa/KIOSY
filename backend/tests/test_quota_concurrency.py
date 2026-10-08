@@ -35,19 +35,42 @@ def test_one_last_place_under_100_concurrent_requests(database_url: str) -> None
             quota_remaining=1,
         )
         db.add(offer)
-        users = [User(email=f"quota-{secrets.token_hex(8)}@test.local", display_name=f"Concurrent {index}", password_hash=hash_password("Concurrent-2026!"), roles=["reader"]) for index in range(100)]
+        users = [
+            User(
+                email=f"quota-{secrets.token_hex(8)}@test.local",
+                display_name=f"Concurrent {index}",
+                password_hash=hash_password("Concurrent-2026!"),
+                roles=["reader"],
+            )
+            for index in range(100)
+        ]
         db.add_all(users)
         db.flush()
         user_ids = [user.id for user in users]
         quote_ids = {}
         for user in users:
-            quote = Quote(user_id=user.id, offer_id=offer.id, snapshot={}, total_amount=offer.price_amount, currency=offer.price_currency, scale=offer.price_scale, created_at=utcnow(), expires_at=utcnow() + timedelta(minutes=10))
+            quote = Quote(
+                user_id=user.id,
+                offer_id=offer.id,
+                snapshot={},
+                total_amount=offer.price_amount,
+                currency=offer.price_currency,
+                scale=offer.price_scale,
+                created_at=utcnow(),
+                expires_at=utcnow() + timedelta(minutes=10),
+            )
             db.add(quote)
             db.flush()
             quote_ids[user.id] = quote.id
 
     def attempt(user_id: str) -> str:
-        payload = {"quote_id": quote_ids[user_id], "offer_id": public_id, "offer_version": 1, "accepted_conditions_version": "mvp-2026-10-01", "renewal_of_subscription_id": None}
+        payload = {
+            "quote_id": quote_ids[user_id],
+            "offer_id": public_id,
+            "offer_version": 1,
+            "accepted_conditions_version": "mvp-2026-10-01",
+            "renewal_of_subscription_id": None,
+        }
         with SessionLocal() as db:
             try:
                 user = db.get(User, user_id)

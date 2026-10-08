@@ -1,2 +1,1 @@
 """PostgreSQL-backed durable worker."""
-

@@ -9,7 +9,7 @@ Prérequis : Docker Desktop, Node 20+ et Python 3.12 si les services sont lancé
 ```powershell
 Copy-Item backend/.env.example backend/.env
 # Remplacer KIOSY_SECRET_KEY et KIOSY_STORAGE_SECRET_KEY dans backend/.env
-docker compose up -d postgres qdrant minio minio-init mailpit
+docker compose up -d postgres qdrant s3mock mailpit
 cd backend
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
@@ -35,7 +35,7 @@ $env:VITE_API_BASE_URL="http://localhost:8000"
 npm run dev
 ```
 
-La documentation API locale est sur `http://localhost:8000/docs`, Mailpit sur `http://localhost:8025`, et MinIO sur `http://localhost:9001`.
+La documentation API locale est sur `http://localhost:8000/docs`, Mailpit sur `http://localhost:8025`, et le stockage S3 de développement sur `http://localhost:9090`.
 
 ## Tests
 
@@ -46,6 +46,7 @@ $env:KIOSY_SECRET_KEY="une-cle-de-test-de-plus-de-32-caracteres"
 $env:KIOSY_LLM_PROVIDER="deterministic"
 .venv\Scripts\pytest
 .venv\Scripts\ruff check app migrations tests
+.venv\Scripts\python -m app.scripts.evaluate_ai
 
 cd ../frontend
 npm run typecheck
@@ -60,6 +61,11 @@ Le seed refuse les environnements staging/production et exige `KIOSY_SEED_PASSWO
 - [Architecture](docs/ARCHITECTURE.md)
 - [Progression P0](docs/PROGRESS.md)
 - [Matrice de couverture](docs/COVERAGE.md)
+- [Matrice T01–T15](docs/REQUIREMENTS_MATRIX.md)
+- [Déploiement](docs/DEPLOYMENT.md)
+- [Sécurité](docs/SECURITY.md)
+- [RAG](docs/RAG.md)
+- [Limites](docs/LIMITS.md)
 - [Contrats MCP](docs/MCP_CONTRACTS.md)
 - [Multi-agent KIA](docs/MULTI_AGENT.md)
 - [Rapport de tests](docs/TEST_REPORT.md)

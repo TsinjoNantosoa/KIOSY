@@ -78,7 +78,9 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(Text)
     roles: Mapped[list[str]] = mapped_column(JsonType, default=lambda: [Role.reader.value])
     publisher_id: Mapped[str | None] = mapped_column(ForeignKey("publishers.id", ondelete="SET NULL"))
-    preferences: Mapped[dict[str, Any]] = mapped_column(JsonType, default=lambda: {"time_zone": "UTC", "language": "fr"})
+    preferences: Mapped[dict[str, Any]] = mapped_column(
+        JsonType, default=lambda: {"time_zone": "UTC", "language": "fr"}
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -130,7 +132,10 @@ class Publication(Base, TimestampMixin):
 
 class Edition(Base, TimestampMixin):
     __tablename__ = "editions"
-    __table_args__ = (UniqueConstraint("publication_id", "label"), CheckConstraint("version > 0", name="version_positive"))
+    __table_args__ = (
+        UniqueConstraint("publication_id", "label"),
+        CheckConstraint("version > 0", name="version_positive"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     publication_id: Mapped[str] = mapped_column(ForeignKey("publications.id", ondelete="CASCADE"), index=True)
     label: Mapped[str] = mapped_column(String(180))
@@ -139,7 +144,9 @@ class Edition(Base, TimestampMixin):
     language: Mapped[str] = mapped_column(String(8))
     page_count: Mapped[int | None] = mapped_column(Integer)
     word_count: Mapped[int | None] = mapped_column(Integer)
-    status: Mapped[EditorialStatus] = mapped_column(Enum(EditorialStatus, name="editorial_status"), index=True)
+    status: Mapped[EditorialStatus] = mapped_column(
+        Enum(EditorialStatus, name="editorial_status"), index=True
+    )
     availability: Mapped[dict[str, Any]] = mapped_column(JsonType)
     permissions: Mapped[dict[str, bool]] = mapped_column(JsonType)
     is_free: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -347,7 +354,9 @@ class Conversation(Base, TimestampMixin):
 class Message(Base):
     __tablename__ = "messages"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
     role: Mapped[str] = mapped_column(String(20))
     blocks: Mapped[list[dict[str, Any]]] = mapped_column(JsonType)
     run_id: Mapped[str | None] = mapped_column(String(36), index=True)
@@ -357,7 +366,9 @@ class Message(Base):
 class Run(Base, TimestampMixin):
     __tablename__ = "runs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    conversation_id: Mapped[str] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(40), index=True)
     last_seq: Mapped[int] = mapped_column(Integer, default=0)
@@ -414,7 +425,9 @@ class DurableTask(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     kind: Mapped[str] = mapped_column(String(80))
     payload: Mapped[dict[str, Any]] = mapped_column(JsonType)
-    status: Mapped[TaskStatus] = mapped_column(Enum(TaskStatus, name="task_status"), default=TaskStatus.queued)
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus, name="task_status"), default=TaskStatus.queued
+    )
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, default=5)
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

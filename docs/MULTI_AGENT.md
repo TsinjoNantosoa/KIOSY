@@ -1,34 +1,21 @@
 # Système multi-agent KIA
 
-## Graphe LangGraph (`app/ai/orchestration.py`)
-
+```text
+START → COORDINATE
+  ├─ CLARIFY → WAITING_USER → RESUME
+  ├─ CATALOG → SUBSCRIPTIONS → CONDITIONS
+  ├─ SUPPORT → [CREATE_SUPPORT_CASE sur demande explicite]
+  └─ DIRECT
+          ↓
+       COMPOSE
+          ↓
+  PREPARE_PURCHASE ou PREPARE_CANCELLATION
+          ↓
+  WAITING_APPROVAL → RESUME → COMPOSE → COMPLETED
 ```
-START → coordinate (intent LLM)
-  ├─ catalog → [subscriptions] → [conditions] → compose → END
-  ├─ conditions → compose
-  └─ compose (direct)
-```
 
-Spécialistes MVP :
+Le coordinateur délègue à quatre spécialistes : catalogue, abonnements/droits, conditions documentaires et support. Tous utilisent les clients MCP officiels ; ils ne lisent pas directement les tables métier. Les sorties `AgentResult` sont validées par Pydantic.
 
-1. **Catalogue** — MCP `search_publications`, `get_publication`, `compare_offers`.
-2. **Abonnements / droits** — MCP `check_entitlement`, `get_my_subscriptions` ; filtre les offres déjà couvertes (entrée = sortie catalogue).
-3. **Conditions** — MCP `search_terms` sur les versions d’offres restantes ; repli contrat `mvp-2026-10-01` puis `get_authorized_excerpt` (RAG).
+Les interruptions LangGraph sont persistées dans PostgreSQL avec `thread_id = run.id`. `waiting_user` et `waiting_approval` reprennent le même checkpoint via `Command(resume=...)`. Les attentes humaines ne consomment pas le budget de temps actif.
 
-## AgentResult
-
-Schéma Pydantic : `status` ∈ {ok, needs_input, blocked, failed}, `summary`, `evidence_refs`, `proposed_actions`, `missing_information`, `warnings`, `trace_id`, `mcp_tools`.
-
-## Coopération observable
-
-Scénario de référence (worker + test) :
-
-> « Compare les offres et abonnements, exclue ce qui est déjà couvert puis vérifie les conditions. »
-
-Intent `cooperate` → trois spécialistes en chaîne ; les droits modifient la liste transmise au spécialiste conditions.
-
-## Exécution durable
-
-`POST /v1/conversations/{id}/runs` → `DurableTask` → `workers/runner.py` → `graph.invoke` avec checkpoint PostgreSQL (`thread_id` = run id).
-
-États run : `queued`, `running`, `completed`, `failed`, `cancelled` ; `waiting_user` / `waiting_approval` prévus côté API mais reprise post-approbation KIA encore partielle.
+Les actions sensibles sont préparées en proposition. La confirmation revalide l’acteur et l’état métier côté serveur. Achat et résiliation ont une preuve de reprise automatisée ; un ticket support n’est créé que lorsque l’utilisateur le demande explicitement.

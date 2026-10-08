@@ -1,5 +1,19 @@
 # Bilan des vérifications
 
+## Passe de durcissement du 7 octobre 2026
+
+La baseline actuelle a reproduit une vraie course de double-clic au checkout : 47/48 tests passaient. Le verrou synchrone était libéré par `onSettled` après une réponse démo rapide, avant le second clic. Il reste maintenant verrouillé après succès jusqu'à la navigation et n'est libéré qu'en cas d'erreur réessayable.
+
+| Vérification réellement exécutée | Résultat |
+|---|---|
+| `npm run typecheck` | ✅ 0 erreur |
+| `npm run lint` | ✅ 0 erreur, 12 avertissements historiques |
+| `npm test -- --run` | ✅ 48/48, 11 fichiers |
+| builds `demo` et `api` | ✅ |
+| `npx playwright test --workers=2` | ✅ 22/22 sur Chromium local |
+
+Le lancement Playwright initial à 6 workers a terminé à 21/22 sur un timeout KIA non reproduit seul ; le cas isolé puis la suite à 2 workers ont passé. Les résultats ne prouvent que le frontend et le mode démo, pas le backend réel.
+
 ## Passe frontend du 1er octobre 2026
 
 | Vérification réellement exécutée | Résultat |

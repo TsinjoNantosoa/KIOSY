@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: kiosy
+          POSTGRES_USER: kiosy
+          POSTGRES_PASSWORD: kiosy-ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U kiosy -d kiosy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      qdrant:
+        image: qdrant/qdrant:v1.15.3
+        ports: ["6333:6333"]
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      KIOSY_ENV: test
+      KIOSY_DATABASE_URL: postgresql+psycopg://kiosy:kiosy-ci-only@localhost:5432/kiosy
+      KIOSY_SECRET_KEY: ci-placeholder-secret-key-at-least-32-characters
+      KIOSY_LLM_PROVIDER: deterministic
+      KIOSY_QDRANT_URL: http://localhost:6333
+      KIOSY_TEST_PAYMENT_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: alembic upgrade head
+      - run: python -m app.scripts.setup_checkpointer
+      - run: python -m app.scripts.seed
+        env:
+          KIOSY_SEED_PASSWORD: Demo-password-for-CI-only-2026!
+      - run: python -m ruff check app tests migrations
+      - run: python -m mypy app
+      - run: python -m pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_APP_MODE: demo
+      - run: npm run build
+        env:
+          VITE_APP_MODE: api
+          VITE_API_BASE_URL: https://api.invalid.example
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --workers=2
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/test-results
+          if-no-files-found: ignore

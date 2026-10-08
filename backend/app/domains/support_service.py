@@ -28,7 +28,11 @@ def create_support_case(
     )
     db.add(row)
     db.flush()
-    db.add(SupportMessage(case_id=row.id, author_id=user.id, author_kind="reader", body=body, created_at=utcnow()))
+    db.add(
+        SupportMessage(
+            case_id=row.id, author_id=user.id, author_kind="reader", body=body, created_at=utcnow()
+        )
+    )
     db.flush()
     return row
 

@@ -23,7 +23,17 @@ def search_publications(
     page_size: int = Query(default=20, ge=1, le=50),
     db: Session = Depends(get_db),
 ) -> dict:
-    return catalog(db, q=q, universe=universe, language=language, format=format, price=price, sort=sort, page=page, page_size=page_size)
+    return catalog(
+        db,
+        q=q,
+        universe=universe,
+        language=language,
+        format=format,
+        price=price,
+        sort=sort,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/publications/featured")
@@ -49,10 +59,20 @@ def publication(identifier: str, db: Session = Depends(get_db)) -> dict:
 @router.get("/editions/{edition_id}/excerpt")
 def excerpt(edition_id: str, db: Session = Depends(get_db)) -> dict:
     edition = db.get(Edition, edition_id)
-    if not edition or edition.status != EditorialStatus.published or not edition.permissions.get("public_excerpt"):
+    if (
+        not edition
+        or edition.status != EditorialStatus.published
+        or not edition.permissions.get("public_excerpt")
+    ):
         raise DomainError(403, "EXCERPT_DENIED", "Aucun extrait public n'est disponible.")
     notice = "Extrait public limité. Le fichier complet n'est pas exposé."
-    return {"edition_id": edition.id, "markdown": f"# {edition.label}\n\n{notice}", "truncated": True, "max_chars": 1500, "notice": notice}
+    return {
+        "edition_id": edition.id,
+        "markdown": f"# {edition.label}\n\n{notice}",
+        "truncated": True,
+        "max_chars": 1500,
+        "notice": notice,
+    }
 
 
 @router.get("/offers")
@@ -72,18 +92,38 @@ def offer(offer_id: str, db: Session = Depends(get_db)) -> dict:
 def contract_document(document_id: str, version: str, db: Session = Depends(get_db)) -> dict:
     from app.api.serializers import iso
     from app.db.models import ContractDocumentVersion
-    row = db.scalar(select(ContractDocumentVersion).where(ContractDocumentVersion.document_id == document_id, ContractDocumentVersion.version == version))
+
+    row = db.scalar(
+        select(ContractDocumentVersion).where(
+            ContractDocumentVersion.document_id == document_id, ContractDocumentVersion.version == version
+        )
+    )
     if not row:
         raise DomainError(404, "DOCUMENT_VERSION_NOT_FOUND", "Cette version du document n'existe pas.")
     if row.visibility != "public":
         raise DomainError(403, "DOCUMENT_FORBIDDEN", "Ce document n'est pas public.")
-    return {"document_id": row.document_id, "version": row.version, "title": row.title, "effective_at": iso(row.effective_at), "source": row.source, "sections": row.sections}
+    return {
+        "document_id": row.document_id,
+        "version": row.version,
+        "title": row.title,
+        "effective_at": iso(row.effective_at),
+        "source": row.source,
+        "sections": row.sections,
+    }
 
 
 @router.get("/contract-documents/{document_id}/current")
 def current_contract_document(document_id: str, db: Session = Depends(get_db)) -> dict:
     from app.db.models import ContractDocumentVersion
-    row = db.scalar(select(ContractDocumentVersion).where(ContractDocumentVersion.document_id == document_id, ContractDocumentVersion.visibility == "public").order_by(ContractDocumentVersion.effective_at.desc()).limit(1))
+
+    row = db.scalar(
+        select(ContractDocumentVersion)
+        .where(
+            ContractDocumentVersion.document_id == document_id, ContractDocumentVersion.visibility == "public"
+        )
+        .order_by(ContractDocumentVersion.effective_at.desc())
+        .limit(1)
+    )
     if not row:
         raise DomainError(404, "DOCUMENT_NOT_FOUND", "Ce document contractuel n'est pas disponible.")
     return contract_document(document_id, row.version, db)

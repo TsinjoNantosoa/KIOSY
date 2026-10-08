@@ -6,7 +6,7 @@ L'API, les services métier, l'orchestration et les trois serveurs MCP partagent
 
 ## ADR-002 — PostgreSQL comme journal autoritaire
 
-PostgreSQL conserve états métier, opérations idempotentes, outbox, tâches, baux, checkpoints de runs et événements SSE. Aucun Redis n'est requis au MVP : il éviterait peu de charge tout en ajoutant un second état durable à exploiter. Les claims utilisent `FOR UPDATE SKIP LOCKED` et des baux récupérables.
+PostgreSQL conserve états métier, opérations idempotentes, outbox, tâches, baux, checkpoints de runs et événements SSE. Aucun Redis n'est requis au MVP. Les claims utilisent `FOR UPDATE SKIP LOCKED`, un jeton de fencing unique et un heartbeat ; une écriture finale provenant d’un bail obsolète est rejetée.
 
 ## ADR-003 — Paiement de test isolé
 
@@ -22,4 +22,4 @@ Trois applications Streamable HTTP (`catalog`, `commerce`, `assistance`) exposen
 
 ## ADR-006 — RAG cloisonné
 
-Qdrant ne contient que des vecteurs et métadonnées de filtrage. PostgreSQL conserve la preuve du passage et l'autorisation IA. Chaque résultat vectoriel est revalidé contre PostgreSQL et les droits actuels. Une collection distincte est créée par espace d'embeddings.
+Qdrant ne contient que des vecteurs et métadonnées de filtrage. PostgreSQL conserve la preuve du passage et l'autorisation IA. Chaque résultat vectoriel est revalidé contre PostgreSQL et les droits actuels. Une collection distincte est créée par version, fournisseur et déploiement d’embeddings.

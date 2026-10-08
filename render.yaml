@@ -1,3 +1,47 @@
+envVarGroups:
+  - name: kiosy-production-shared
+    envVars:
+      - key: KIOSY_SECRET_KEY
+        generateValue: true
+      - key: KIOSY_ENV
+        value: production
+      - key: KIOSY_COOKIE_SECURE
+        value: "true"
+      - key: KIOSY_COOKIE_SAMESITE
+        value: none
+      - key: KIOSY_TEST_PAYMENT_ENABLED
+        value: "false"
+      - key: KIOSY_RUN_MAX_DELEGATIONS
+        value: "4"
+      - key: KIOSY_RUN_MAX_TOOL_CALLS
+        value: "12"
+      - key: KIOSY_RUN_MAX_LLM_CALLS
+        value: "6"
+      - key: KIOSY_RUN_ACTIVE_TIMEOUT_SECONDS
+        value: "120"
+      - key: KIOSY_RUN_MAX_ESTIMATED_TOKENS
+        value: "12000"
+      - key: KIOSY_RUN_RATE_LIMIT_PER_HOUR
+        value: "20"
+      - key: KIOSY_RUN_MAX_ACTIVE_PER_USER
+        value: "2"
+      - key: KIOSY_RUN_MAX_ACTIVE_GLOBAL
+        value: "20"
+      - key: KIOSY_WORKER_LEASE_SECONDS
+        value: "60"
+      - key: KIOSY_WORKER_HEARTBEAT_SECONDS
+        value: "20"
+      - key: KIOSY_EMBEDDING_NAMESPACE_VERSION
+        value: v1
+      - key: KIOSY_LLM_PROVIDER
+        value: azure
+      - key: KIOSY_ENABLE_LIVE_AZURE
+        value: "true"
+      - key: KIOSY_EMAIL_MODE
+        value: smtp
+      - key: KIOSY_SMTP_STARTTLS
+        value: "true"
+
 services:
   - type: web
     name: kiosy-api
@@ -5,31 +49,100 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /health/ready
-    preDeployCommand: alembic upgrade head
+    preDeployCommand: alembic upgrade head && python -m app.scripts.setup_checkpointer
+    maxShutdownDelaySeconds: 60
     envVars:
-      - key: KIOSY_ENV
-        value: production
+      - fromGroup: kiosy-production-shared
       - key: KIOSY_DATABASE_URL
         fromDatabase: { name: kiosy-postgres, property: connectionString }
-      - key: KIOSY_SECRET_KEY
-        generateValue: true
-      - key: KIOSY_TEST_PAYMENT_ENABLED
-        value: "false"
+      - key: KIOSY_PUBLIC_API_URL
+        value: https://kiosy-api.onrender.com
+      - key: KIOSY_FRONTEND_ORIGINS
+        sync: false
+      - key: KIOSY_MCP_ALLOWED_ORIGINS
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_FRONTEND_ORIGINS }
+      - key: KIOSY_MCP_ALLOWED_HOSTS
+        value: '["kiosy-api.onrender.com"]'
+      - key: KIOSY_STORAGE_ENDPOINT
+        sync: false
+      - key: KIOSY_STORAGE_PUBLIC_ORIGIN
+        sync: false
+      - key: KIOSY_STORAGE_BUCKET
+        sync: false
+      - key: KIOSY_STORAGE_ACCESS_KEY
+        sync: false
+      - key: KIOSY_STORAGE_SECRET_KEY
+        sync: false
+      - key: KIOSY_QDRANT_URL
+        sync: false
+      - key: KIOSY_SMTP_HOST
+        sync: false
+      - key: KIOSY_SMTP_PORT
+        sync: false
+      - key: KIOSY_SMTP_USERNAME
+        sync: false
+      - key: KIOSY_SMTP_PASSWORD
+        sync: false
+      - key: KIOSY_SMTP_FROM
+        sync: false
+      - key: KIOSY_AZURE_OPENAI_API_KEY
+        sync: false
+      - key: KIOSY_AZURE_OPENAI_ENDPOINT
+        sync: false
+      - key: KIOSY_AZURE_OPENAI_DEPLOYMENT
+        sync: false
+      - key: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+        sync: false
+
   - type: worker
     name: kiosy-worker
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     dockerCommand: python -m app.workers.runner
+    maxShutdownDelaySeconds: 150
     envVars:
-      - key: KIOSY_ENV
-        value: production
+      - fromGroup: kiosy-production-shared
       - key: KIOSY_DATABASE_URL
         fromDatabase: { name: kiosy-postgres, property: connectionString }
-      - key: KIOSY_SECRET_KEY
-        sync: false
-      - key: KIOSY_TEST_PAYMENT_ENABLED
-        value: "false"
+      - key: KIOSY_PUBLIC_API_URL
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_PUBLIC_API_URL }
+      - key: KIOSY_FRONTEND_ORIGINS
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_FRONTEND_ORIGINS }
+      - key: KIOSY_MCP_ALLOWED_ORIGINS
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_MCP_ALLOWED_ORIGINS }
+      - key: KIOSY_MCP_ALLOWED_HOSTS
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_MCP_ALLOWED_HOSTS }
+      - key: KIOSY_STORAGE_ENDPOINT
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_STORAGE_ENDPOINT }
+      - key: KIOSY_STORAGE_PUBLIC_ORIGIN
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_STORAGE_PUBLIC_ORIGIN }
+      - key: KIOSY_STORAGE_BUCKET
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_STORAGE_BUCKET }
+      - key: KIOSY_STORAGE_ACCESS_KEY
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_STORAGE_ACCESS_KEY }
+      - key: KIOSY_STORAGE_SECRET_KEY
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_STORAGE_SECRET_KEY }
+      - key: KIOSY_QDRANT_URL
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_QDRANT_URL }
+      - key: KIOSY_SMTP_HOST
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_SMTP_HOST }
+      - key: KIOSY_SMTP_PORT
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_SMTP_PORT }
+      - key: KIOSY_SMTP_USERNAME
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_SMTP_USERNAME }
+      - key: KIOSY_SMTP_PASSWORD
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_SMTP_PASSWORD }
+      - key: KIOSY_SMTP_FROM
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_SMTP_FROM }
+      - key: KIOSY_AZURE_OPENAI_API_KEY
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_API_KEY }
+      - key: KIOSY_AZURE_OPENAI_ENDPOINT
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_ENDPOINT }
+      - key: KIOSY_AZURE_OPENAI_DEPLOYMENT
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_DEPLOYMENT }
+      - key: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT }
 
 databases:
   - name: kiosy-postgres

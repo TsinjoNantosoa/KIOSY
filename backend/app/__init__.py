@@ -1,2 +1,1 @@
 """Kiosy backend package."""
-

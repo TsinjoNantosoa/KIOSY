@@ -63,7 +63,13 @@ def get_csrf(
 
 
 @router.post("/auth/register")
-def register(payload: RegisterInput, request: Request, response: Response, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict:
+def register(
+    payload: RegisterInput,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict:
     current_terms = db.scalar(
         select(ContractDocumentVersion).where(
             ContractDocumentVersion.document_id == "utilisation",
@@ -97,7 +103,13 @@ def register(payload: RegisterInput, request: Request, response: Response, db: S
 
 
 @router.post("/auth/login")
-def login(payload: LoginInput, request: Request, response: Response, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> dict:
+def login(
+    payload: LoginInput,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict:
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if not user or not verify_password(user.password_hash, payload.password) or not user.is_active:
         raise DomainError(401, "INVALID_CREDENTIALS", "Adresse ou mot de passe incorrect.")
@@ -120,7 +132,9 @@ def login(payload: LoginInput, request: Request, response: Response, db: Session
 
 
 @router.get("/auth/session", response_model=None)
-def get_session(kiosy_session: str | None = Cookie(default=None), db: Session = Depends(get_db)) -> dict | Response:
+def get_session(
+    kiosy_session: str | None = Cookie(default=None), db: Session = Depends(get_db)
+) -> dict | Response:
     loaded = load_session(db, kiosy_session)
     if not loaded:
         return Response(status_code=204)
@@ -129,8 +143,25 @@ def get_session(kiosy_session: str | None = Cookie(default=None), db: Session = 
 
 
 @router.post("/auth/logout", status_code=204)
-def logout(response: Response, session: tuple[SessionRecord, User] = Depends(current_session), db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> Response:
+def logout(
+    request: Request,
+    response: Response,
+    session: tuple[SessionRecord, User] = Depends(current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> Response:
     session[0].revoked_at = utcnow()
+    from app.domains.audit import record_audit
+
+    record_audit(
+        db,
+        action="auth.logout",
+        target_type="session",
+        target_id=session[0].id,
+        result="success",
+        request_id=getattr(request.state, "request_id", "unknown"),
+        actor=session[1],
+    )
     db.commit()
     response.delete_cookie(SESSION_COOKIE, path="/", domain=settings.cookie_domain)
     response.delete_cookie(CSRF_BINDING_COOKIE, path="/", domain=settings.cookie_domain)
@@ -139,24 +170,59 @@ def logout(response: Response, session: tuple[SessionRecord, User] = Depends(cur
 
 
 @router.get("/me/sessions")
-def sessions(session: tuple[SessionRecord, User] = Depends(current_session), db: Session = Depends(get_db)) -> list[dict]:
+def sessions(
+    session: tuple[SessionRecord, User] = Depends(current_session), db: Session = Depends(get_db)
+) -> list[dict]:
     current, user = session
-    rows = db.scalars(select(SessionRecord).where(SessionRecord.user_id == user.id, SessionRecord.revoked_at.is_(None))).all()
-    return [{"id": row.id, "device_label": row.device_label, "created_at": iso(row.created_at), "last_seen_at": iso(row.last_seen_at), "current": row.id == current.id} for row in rows]
+    rows = db.scalars(
+        select(SessionRecord).where(SessionRecord.user_id == user.id, SessionRecord.revoked_at.is_(None))
+    ).all()
+    return [
+        {
+            "id": row.id,
+            "device_label": row.device_label,
+            "created_at": iso(row.created_at),
+            "last_seen_at": iso(row.last_seen_at),
+            "current": row.id == current.id,
+        }
+        for row in rows
+    ]
 
 
 @router.delete("/me/sessions/{session_id}", status_code=204)
-def revoke_session(session_id: str, session: tuple[SessionRecord, User] = Depends(current_session), db: Session = Depends(get_db)) -> Response:
-    row = db.scalar(select(SessionRecord).where(SessionRecord.id == session_id, SessionRecord.user_id == session[1].id))
+def revoke_session(
+    session_id: str,
+    request: Request,
+    session: tuple[SessionRecord, User] = Depends(current_session),
+    db: Session = Depends(get_db),
+) -> Response:
+    row = db.scalar(
+        select(SessionRecord).where(SessionRecord.id == session_id, SessionRecord.user_id == session[1].id)
+    )
     if not row:
         raise DomainError(404, "NOT_FOUND", "Session introuvable.")
     row.revoked_at = utcnow()
+    from app.domains.audit import record_audit
+
+    record_audit(
+        db,
+        action="auth.session.revoked",
+        target_type="session",
+        target_id=row.id,
+        result="success",
+        request_id=getattr(request.state, "request_id", "unknown"),
+        actor=session[1],
+    )
     db.commit()
     return Response(status_code=204)
 
 
 @router.patch("/me/preferences")
-def preferences(payload: PreferencesInput, session: tuple[SessionRecord, User] = Depends(current_session), db: Session = Depends(get_db)) -> dict:
+def preferences(
+    payload: PreferencesInput,
+    session: tuple[SessionRecord, User] = Depends(current_session),
+    db: Session = Depends(get_db),
+) -> dict:
     record, user = session
     values = payload.model_dump(exclude_none=True)
     if "display_name" in values:
@@ -167,11 +233,17 @@ def preferences(payload: PreferencesInput, session: tuple[SessionRecord, User] =
 
 
 @router.post("/auth/password/forgot", status_code=204)
-def forgot(payload: ForgotInput, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> Response:
+def forgot(
+    payload: ForgotInput, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+) -> Response:
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if user:
         raw = opaque_token()
-        db.add(PasswordReset(user_id=user.id, token_hash=token_hash(raw), expires_at=utcnow() + timedelta(minutes=30)))
+        db.add(
+            PasswordReset(
+                user_id=user.id, token_hash=token_hash(raw), expires_at=utcnow() + timedelta(minutes=30)
+            )
+        )
         if settings.email_mode != "disabled":
             enqueue(db, "send_password_reset", {"email": user.email, "token": raw})
         db.commit()
@@ -180,7 +252,9 @@ def forgot(payload: ForgotInput, db: Session = Depends(get_db), settings: Settin
 
 @router.post("/auth/password/reset", status_code=204)
 def reset(payload: ResetInput, db: Session = Depends(get_db)) -> Response:
-    row = db.scalar(select(PasswordReset).where(PasswordReset.token_hash == token_hash(payload.token)).with_for_update())
+    row = db.scalar(
+        select(PasswordReset).where(PasswordReset.token_hash == token_hash(payload.token)).with_for_update()
+    )
     if not row or row.used_at or row.expires_at <= utcnow():
         raise DomainError(409, "RESET_TOKEN_INVALID", "Le lien est invalide ou expiré.")
     user = db.get(User, row.user_id)
@@ -188,7 +262,9 @@ def reset(payload: ResetInput, db: Session = Depends(get_db)) -> Response:
         raise DomainError(409, "RESET_TOKEN_INVALID", "Le lien est invalide ou expiré.")
     user.password_hash = hash_password(payload.password)
     row.used_at = utcnow()
-    for active in db.scalars(select(SessionRecord).where(SessionRecord.user_id == user.id, SessionRecord.revoked_at.is_(None))):
+    for active in db.scalars(
+        select(SessionRecord).where(SessionRecord.user_id == user.id, SessionRecord.revoked_at.is_(None))
+    ):
         active.revoked_at = utcnow()
     db.commit()
     return Response(status_code=204)

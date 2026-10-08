@@ -17,7 +17,9 @@ def fingerprint(payload: Any) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def begin(db: Session, actor_id: str, operation: str, key: str | None, payload: Any) -> tuple[IdempotencyOperation, dict[str, Any] | None]:
+def begin(
+    db: Session, actor_id: str, operation: str, key: str | None, payload: Any
+) -> tuple[IdempotencyOperation, dict[str, Any] | None]:
     if not key or len(key) > 160:
         raise DomainError(422, "IDEMPOTENCY_KEY_REQUIRED", "Une clé d'idempotence valide est requise.")
     digest = fingerprint(payload)
@@ -30,10 +32,14 @@ def begin(db: Session, actor_id: str, operation: str, key: str | None, payload: 
     )
     if existing:
         if existing.request_hash != digest:
-            raise DomainError(409, "IDEMPOTENCY_MISMATCH", "Cette clé a déjà été utilisée pour une autre requête.")
+            raise DomainError(
+                409, "IDEMPOTENCY_MISMATCH", "Cette clé a déjà été utilisée pour une autre requête."
+            )
         if existing.state == "completed" and existing.response_body is not None:
             return existing, existing.response_body
-        raise DomainError(409, "OPERATION_IN_PROGRESS", "L'opération est encore en cours. Consultez son état.")
+        raise DomainError(
+            409, "OPERATION_IN_PROGRESS", "L'opération est encore en cours. Consultez son état."
+        )
     row = IdempotencyOperation(
         actor_id=actor_id,
         operation=operation,
@@ -51,10 +57,11 @@ def begin(db: Session, actor_id: str, operation: str, key: str | None, payload: 
     return row, None
 
 
-def complete(row: IdempotencyOperation, body: dict[str, Any], status: int, resource_type: str, resource_id: str) -> None:
+def complete(
+    row: IdempotencyOperation, body: dict[str, Any], status: int, resource_type: str, resource_id: str
+) -> None:
     row.state = "completed"
     row.response_body = body
     row.response_status = status
     row.resource_type = resource_type
     row.resource_id = resource_id
-

@@ -18,20 +18,14 @@ services:
     ports: ["6333:6333"]
     volumes: ["kiosy_qdrant:/qdrant/storage"]
 
-  minio:
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
-    command: server /data --console-address :9001
+  s3mock:
+    image: adobe/s3mock:5.1.0
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minio-local-only
-    ports: ["9000:9000", "9001:9001"]
-    volumes: ["kiosy_minio:/data"]
-
-  minio-init:
-    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
-    depends_on: [minio]
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["until mc alias set local http://minio:9000 minioadmin minio-local-only; do sleep 1; done; mc mb --ignore-existing local/kiosy-private; mc anonymous set none local/kiosy-private"]
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: kiosy-private
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+    ports: ["9090:9090"]
+    volumes: ["kiosy_s3mock:/s3mockroot"]
 
   mailpit:
     image: axllent/mailpit:v1.27
@@ -42,14 +36,14 @@ services:
     env_file: ./backend/.env
     environment:
       KIOSY_DATABASE_URL: postgresql+psycopg://kiosy:kiosy-local-only@postgres:5432/kiosy
-      KIOSY_STORAGE_ENDPOINT: http://minio:9000
+      KIOSY_STORAGE_ENDPOINT: http://s3mock:9090
       KIOSY_QDRANT_URL: http://qdrant:6333
       KIOSY_SMTP_HOST: mailpit
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
-      minio-init: { condition: service_completed_successfully }
+      s3mock: { condition: service_started }
       qdrant: { condition: service_started }
 
   worker:
@@ -57,16 +51,16 @@ services:
     env_file: ./backend/.env
     environment:
       KIOSY_DATABASE_URL: postgresql+psycopg://kiosy:kiosy-local-only@postgres:5432/kiosy
-      KIOSY_STORAGE_ENDPOINT: http://minio:9000
+      KIOSY_STORAGE_ENDPOINT: http://s3mock:9090
       KIOSY_QDRANT_URL: http://qdrant:6333
       KIOSY_SMTP_HOST: mailpit
     command: python -m app.workers.runner
     depends_on:
       postgres: { condition: service_healthy }
-      minio-init: { condition: service_completed_successfully }
+      s3mock: { condition: service_started }
       qdrant: { condition: service_started }
 
 volumes:
   kiosy_postgres:
   kiosy_qdrant:
-  kiosy_minio:
+  kiosy_s3mock:

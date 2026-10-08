@@ -2,13 +2,13 @@
 
 ## Render et Vercel
 
-`render.yaml` sépare API et worker; seule l'API lance `alembic upgrade head` en pré-déploiement. Les deux services doivent recevoir exactement le même `KIOSY_SECRET_KEY`, la même base, les accès S3/Qdrant/SMTP et les paramètres Azure. Configurer côté Vercel `VITE_APP_MODE=api` et `VITE_API_BASE_URL`, puis déclarer l'origine Vercel exacte dans `KIOSY_FRONTEND_ORIGINS`. En cross-site, utiliser HTTPS, `KIOSY_COOKIE_SECURE=true` et `KIOSY_COOKIE_SAMESITE=none`.
+`render.yaml` sépare API et worker; seule l'API lance `alembic upgrade head` puis `python -m app.scripts.setup_checkpointer` en pré-déploiement. Les deux services partagent exactement le même secret Kiosy, la même base, les accès S3/Qdrant/SMTP et les paramètres Azure. Configurer côté Vercel `VITE_APP_MODE=api` et `VITE_API_BASE_URL`, puis déclarer l'origine Vercel exacte dans `KIOSY_FRONTEND_ORIGINS`. En cross-site, utiliser HTTPS, `KIOSY_COOKIE_SECURE=true` et `KIOSY_COOKIE_SAMESITE=none`.
 
 Qdrant et le stockage S3 sont des services persistants externes à fournir à Render; le blueprint ne crée volontairement aucun service payant. Le simulateur de paiement reste désactivé en production.
 
 ## Santé, tâches et arrêt
 
-`/health/live` vérifie le processus; `/health/ready` vérifie PostgreSQL sans exposer de détail. Surveiller les `durable_tasks` en `running` dont `lease_until` est dépassé, et les statuts `failed`. Un worker interrompu laisse expirer son bail; un autre reprend la tâche. L'arrêt de l'API ne détruit aucun travail durable.
+`/health/live` vérifie le processus; `/health/ready` vérifie PostgreSQL sans exposer de détail. Surveiller les tâches au bail dépassé, les retries, les statuts `failed` et les outbox non publiées. Le worker renouvelle son bail, refuse les écritures d’un propriétaire obsolète et termine la tâche active avant l’arrêt gracieux lorsque le délai plateforme le permet.
 
 ## Sauvegarde et restauration
 

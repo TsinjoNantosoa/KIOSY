@@ -33,7 +33,9 @@ class S3Storage:
         return url, (utcnow() + timedelta(seconds=expires_seconds)).isoformat().replace("+00:00", "Z")
 
     def upload(self, object_key: str, content: bytes, media_type: str) -> None:
-        self.client.put_object(Bucket=self.settings.storage_bucket, Key=object_key, Body=content, ContentType=media_type)
+        self.client.put_object(
+            Bucket=self.settings.storage_bucket, Key=object_key, Body=content, ContentType=media_type
+        )
 
     def read(self, object_key: str) -> bytes:
         response = self.client.get_object(Bucket=self.settings.storage_bucket, Key=object_key)

@@ -5,6 +5,23 @@ from sqlalchemy.orm import Session
 from app.core.security import utcnow
 from app.db.models import AuditEvent, User
 
+_SENSITIVE_PARTS = ("token", "cookie", "secret", "password", "authorization", "signed_url", "card")
+
+
+def _sanitize(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): "[REDACTED]"
+            if any(part in str(key).casefold() for part in _SENSITIVE_PARTS)
+            else _sanitize(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize(item) for item in value[:50]]
+    if isinstance(value, str):
+        return value[:500]
+    return value
+
 
 def record_audit(
     db: Session,
@@ -29,7 +46,7 @@ def record_audit(
         reason=reason,
         result=result,
         request_id=request_id,
-        metadata_json=metadata or {},
+        metadata_json=_sanitize(metadata or {}),
     )
     db.add(row)
     return row

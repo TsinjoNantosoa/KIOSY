@@ -51,6 +51,8 @@ def test_expired_proposal_returns_409(database_url: str, client: TestClient) -> 
         db.add(row)
         db.flush()
         proposal_id = row.id
-    response = client.post(f"/v1/proposals/{proposal_id}/confirm", headers={**headers, "Idempotency-Key": str(uuid.uuid4())})
+    response = client.post(
+        f"/v1/proposals/{proposal_id}/confirm", headers={**headers, "Idempotency-Key": str(uuid.uuid4())}
+    )
     assert response.status_code == 409
     assert response.json()["code"] == "PROPOSAL_EXPIRED"

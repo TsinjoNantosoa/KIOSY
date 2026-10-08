@@ -22,9 +22,15 @@ transport_security = TransportSecuritySettings(
     allowed_hosts=settings.mcp_allowed_hosts,
     allowed_origins=settings.mcp_allowed_origins,
 )
-catalog_mcp_app = catalog_mcp.streamable_http_app(streamable_http_path="/", transport_security=transport_security)
-commerce_mcp_app = commerce_mcp.streamable_http_app(streamable_http_path="/", transport_security=transport_security)
-assistance_mcp_app = assistance_mcp.streamable_http_app(streamable_http_path="/", transport_security=transport_security)
+catalog_mcp_app = catalog_mcp.streamable_http_app(
+    streamable_http_path="/", transport_security=transport_security
+)
+commerce_mcp_app = commerce_mcp.streamable_http_app(
+    streamable_http_path="/", transport_security=transport_security
+)
+assistance_mcp_app = assistance_mcp.streamable_http_app(
+    streamable_http_path="/", transport_security=transport_security
+)
 
 
 @asynccontextmanager
@@ -66,9 +72,19 @@ async def request_context(request: Request, call_next):
     )
     if not csrf_exempt:
         try:
-            validate_csrf(request.headers.get("X-CSRF-Token"), request.cookies.get(CSRF_BINDING_COOKIE), settings)
+            validate_csrf(
+                request.headers.get("X-CSRF-Token"), request.cookies.get(CSRF_BINDING_COOKIE), settings
+            )
         except DomainError as exc:
-            return JSONResponse(status_code=exc.status, content={"code": exc.code, "message": exc.message, "details": [], "request_id": request.state.request_id})
+            return JSONResponse(
+                status_code=exc.status,
+                content={
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": [],
+                    "request_id": request.state.request_id,
+                },
+            )
     response = await call_next(request)
     response.headers["X-Request-ID"] = request.state.request_id
     return response
@@ -86,7 +102,17 @@ def ready() -> dict[str, str]:
     return {"status": "ready"}
 
 
-for router in (auth.router, catalog.router, commerce.router, account.router, assistant.router, support.router, proposals.router, admin.router, admin_views.router):
+for router in (
+    auth.router,
+    catalog.router,
+    commerce.router,
+    account.router,
+    assistant.router,
+    support.router,
+    proposals.router,
+    admin.router,
+    admin_views.router,
+):
     app.include_router(router)
 
 app.routes.extend(

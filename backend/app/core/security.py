@@ -48,7 +48,9 @@ def csrf_token(binding: str, settings: Settings) -> str:
     expires = int(time.time()) + settings.csrf_ttl_minutes * 60
     nonce = secrets.token_urlsafe(16)
     payload = f"{expires}.{nonce}"
-    signature = hmac.new(settings.secret_key.encode(), f"{binding}.{payload}".encode(), hashlib.sha256).digest()
+    signature = hmac.new(
+        settings.secret_key.encode(), f"{binding}.{payload}".encode(), hashlib.sha256
+    ).digest()
     return f"{payload}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
 
 
@@ -60,7 +62,9 @@ def validate_csrf(token: str | None, binding: str | None, settings: Settings) ->
         if int(expires_text) < int(time.time()):
             raise DomainError(403, "CSRF_EXPIRED", "Le jeton anti-CSRF a expiré.")
         payload = f"{expires_text}.{nonce}"
-        expected = hmac.new(settings.secret_key.encode(), f"{binding}.{payload}".encode(), hashlib.sha256).digest()
+        expected = hmac.new(
+            settings.secret_key.encode(), f"{binding}.{payload}".encode(), hashlib.sha256
+        ).digest()
         actual = base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))
     except DomainError:
         raise
@@ -120,7 +124,9 @@ def require_roles(*roles: str):
     return dependency
 
 
-def create_session(db: Session, user: User, device_label: str, csrf_binding: str, settings: Settings) -> tuple[SessionRecord, str]:
+def create_session(
+    db: Session, user: User, device_label: str, csrf_binding: str, settings: Settings
+) -> tuple[SessionRecord, str]:
     raw = opaque_token()
     now = utcnow()
     record = SessionRecord(
@@ -140,4 +146,3 @@ def create_session(db: Session, user: User, device_label: str, csrf_binding: str
 def request_device_label(request: Request) -> str:
     value = request.headers.get("user-agent", "Navigateur")
     return value[:200]
-

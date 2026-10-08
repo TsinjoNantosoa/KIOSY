@@ -105,7 +105,9 @@ def offer_out(item: Offer) -> dict[str, Any]:
     }
 
 
-def order_out(order: Order, payment: PaymentAttempt | None, reservation: Reservation | None) -> dict[str, Any]:
+def order_out(
+    order: Order, payment: PaymentAttempt | None, reservation: Reservation | None
+) -> dict[str, Any]:
     snapshot = order.offer_snapshot
     amount = money(order.total_amount, order.currency, order.scale)
     payment_out = None
@@ -136,4 +138,3 @@ def order_out(order: Order, payment: PaymentAttempt | None, reservation: Reserva
         "exception_reason": order.exception_reason,
         "is_demo": False,
     }
-

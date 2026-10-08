@@ -127,6 +127,7 @@ function QuoteView({ quote, onRefresh, refreshing }: { quote: Quote; onRefresh: 
       navigate(`/commande/${order.id}`, { replace: true });
     },
     onError: (error) => {
+      submitting.current = false;
       // Un refus métier impose une nouvelle intention ; une erreur réseau garde la même clé.
       if (isApiError(error) && error.kind !== "network" && error.kind !== "unavailable") {
         reset();
@@ -135,9 +136,6 @@ function QuoteView({ quote, onRefresh, refreshing }: { quote: Quote; onRefresh: 
           onRefresh();
         }
       }
-    },
-    onSettled: () => {
-      submitting.current = false;
     },
   });
 

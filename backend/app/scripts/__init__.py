@@ -1,2 +1,1 @@
 """Operational commands."""
-

@@ -35,7 +35,12 @@ class RetrievalIndex:
 
     def _space(self) -> str:
         status = self.provider.status()
-        return f"{status.provider}:{status.deployment or 'deterministic'}"
+        embedding_model = (
+            self.settings.azure_openai_embedding_deployment
+            if status.provider == "azure-v1"
+            else status.deployment or "deterministic"
+        )
+        return f"{self.settings.embedding_namespace_version}:{status.provider}:{embedding_model}"
 
     def _collection(self) -> str:
         return "kiosy_" + hashlib.sha256(self._space().encode()).hexdigest()[:16]
@@ -88,18 +93,18 @@ class RetrievalIndex:
             pending.append((row, vector, item))
         db.flush()
         points = [
-                models.PointStruct(
-                    id=row.vector_id,
-                    vector=vector,
-                    payload={
-                        "passage_id": row.id,
-                        "document_id": item.document_id,
-                        "version": item.version,
-                        "publisher_id": item.publisher_id,
-                        "visibility": item.visibility,
-                        "ai_allowed": item.ai_allowed,
-                    },
-                )
+            models.PointStruct(
+                id=row.vector_id,
+                vector=vector,
+                payload={
+                    "passage_id": row.id,
+                    "document_id": item.document_id,
+                    "version": item.version,
+                    "publisher_id": item.publisher_id,
+                    "visibility": item.visibility,
+                    "ai_allowed": item.ai_allowed,
+                },
+            )
             for row, vector, item in pending
         ]
         if points:
@@ -134,7 +139,9 @@ class RetrievalIndex:
         return [rows[item] for item in allowed_ids if item in rows]
 
     def withdraw(self, db: Session, document_id: str, version: str | None = None) -> int:
-        statement = select(RagPassage).where(RagPassage.document_id == document_id, RagPassage.withdrawn_at.is_(None))
+        statement = select(RagPassage).where(
+            RagPassage.document_id == document_id, RagPassage.withdrawn_at.is_(None)
+        )
         if version:
             statement = statement.where(RagPassage.version == version)
         rows = list(db.scalars(statement))

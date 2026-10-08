@@ -18,5 +18,6 @@ Fichier de reprise. Mis à jour à chaque étape.
 - Montants : `{ amount, currency, scale }` entier ; démo en MGA avec `scale = 0` (ariary entiers).
 - Pas de token en localStorage. En démo, seul l'identifiant de persona fictive est gardé en sessionStorage.
 
-## État au 1er octobre 2026
-La passe frontend demandée est implémentée sans backend. Les créations d'offre et d'édition fonctionnent en démo et disposent de contrats HTTP proposés. Les limites et dépendances sont décrites dans `FRONTEND_REVIEW.md` et `BACKEND_HANDOFF.md`; aucune aptitude production n'est revendiquée.
+## État au 7 octobre 2026
+
+La régression de double soumission checkout reproduite pendant la baseline a été corrigée dans le code, sans assouplir son assertion. TypeScript, lint, 48 tests Vitest, les deux builds et les 22 E2E de démonstration passent. Les limites et dépendances restent décrites dans `FRONTEND_REVIEW.md` et `BACKEND_HANDOFF.md`; aucune aptitude production ni validation du backend réel n'est revendiquée.

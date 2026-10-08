@@ -2,7 +2,7 @@ import secrets
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,11 +41,19 @@ class Settings(BaseSettings):
     azure_openai_endpoint: str | None = None
     azure_openai_deployment: str | None = None
     azure_openai_embedding_deployment: str | None = None
+    embedding_namespace_version: str = "v1"
     enable_live_azure: bool = False
     run_max_delegations: int = 4
     run_max_tool_calls: int = 12
+    run_max_llm_calls: int = 6
     run_active_timeout_seconds: int = 120
     run_max_message_chars: int = 8_000
+    run_max_estimated_tokens: int = 12_000
+    run_rate_limit_per_hour: int = 20
+    run_max_active_per_user: int = 2
+    run_max_active_global: int = 20
+    worker_lease_seconds: int = 60
+    worker_heartbeat_seconds: int = 20
     mcp_allowed_hosts: list[str] = ["localhost", "127.0.0.1"]
     mcp_allowed_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
@@ -63,6 +71,15 @@ class Settings(BaseSettings):
             raise ValueError("credentialed CORS requires explicit frontend origins")
         return [origin.rstrip("/") for origin in value]
 
+    @field_validator("mcp_allowed_hosts")
+    @classmethod
+    def allow_configured_local_hosts_on_explicit_ports(cls, value: list[str]) -> list[str]:
+        expanded = list(value)
+        for host in value:
+            if host in {"localhost", "127.0.0.1", "[::1]"} and f"{host}:*" not in expanded:
+                expanded.append(f"{host}:*")
+        return expanded
+
     @field_validator("database_url")
     @classmethod
     def use_psycopg_driver(cls, value: str) -> str:
@@ -71,6 +88,42 @@ class Settings(BaseSettings):
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+psycopg://", 1)
         return value
+
+    @model_validator(mode="after")
+    def production_has_no_local_or_insecure_fallback(self) -> "Settings":
+        if self.worker_heartbeat_seconds >= self.worker_lease_seconds:
+            raise ValueError("worker heartbeat must be shorter than its lease")
+        if self.env != "production":
+            return self
+        local_markers = ("localhost", "127.0.0.1", "[::1]")
+        endpoints = {
+            "database_url": self.database_url,
+            "public_api_url": self.public_api_url,
+            "storage_endpoint": self.storage_endpoint,
+            "storage_public_origin": self.storage_public_origin,
+            "qdrant_url": self.qdrant_url,
+        }
+        for name, value in endpoints.items():
+            if any(marker in value.casefold() for marker in local_markers):
+                raise ValueError(f"{name} cannot use a local endpoint in production")
+        for name in ("public_api_url", "storage_endpoint", "storage_public_origin", "qdrant_url"):
+            if not endpoints[name].startswith("https://"):
+                raise ValueError(f"{name} must use HTTPS in production")
+        if not self.cookie_secure or self.cookie_samesite != "none":
+            raise ValueError("cross-site production cookies require Secure and SameSite=None")
+        if self.test_payment_enabled:
+            raise ValueError("test payment must be disabled in production")
+        if any(
+            any(marker in origin.casefold() for marker in local_markers) for origin in self.frontend_origins
+        ):
+            raise ValueError("frontend origins cannot be local in production")
+        if not self.storage_access_key or not self.storage_secret_key:
+            raise ValueError("production object storage credentials are required")
+        if self.email_mode == "mailpit" or (
+            self.email_mode == "smtp" and any(marker in self.smtp_host.casefold() for marker in local_markers)
+        ):
+            raise ValueError("production email cannot use a local Mailpit endpoint")
+        return self
 
 
 @lru_cache
