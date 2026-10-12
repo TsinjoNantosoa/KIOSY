@@ -2,6 +2,24 @@ import { memo } from "react";
 import type { CoverSpec } from "@/contracts/models";
 import { cn } from "@/lib/cn";
 
+const DEFAULT_COVER: CoverSpec = {
+  palette: ["#F4EFE3", "#1B2230", "#1F5D4C"],
+  motif: "grid",
+  kicker: "Kiosy",
+};
+
+const COVER_MOTIFS = new Set<CoverSpec["motif"]>(["columns", "bars", "arcs", "grid", "waves", "rings"]);
+
+/** Protège l'interface contre les anciennes publications dont la couverture est vide ou incomplète. */
+function normalizeCover(spec: CoverSpec | null | undefined): CoverSpec {
+  const palette = Array.isArray(spec?.palette) && spec.palette.length >= 3 && spec.palette.slice(0, 3).every((color) => typeof color === "string" && color.length > 0)
+    ? ([spec.palette[0], spec.palette[1], spec.palette[2]] as CoverSpec["palette"])
+    : DEFAULT_COVER.palette;
+  const motif = spec?.motif && COVER_MOTIFS.has(spec.motif) ? spec.motif : DEFAULT_COVER.motif;
+  const kicker = typeof spec?.kicker === "string" && spec.kicker.trim() ? spec.kicker : DEFAULT_COVER.kicker;
+  return { palette, motif, kicker };
+}
+
 /**
  * Couverture originale générée en SVG (aucune image externe). Ratio 3:4 réservé pour éviter
  * les décalages de mise en page. Décorative : le titre est déjà présent en texte à côté.
@@ -65,8 +83,9 @@ function Motif({ motif, accent, ink }: { motif: CoverSpec["motif"]; accent: stri
   }
 }
 
-export const Cover = memo(function Cover({ spec, title, className, size = "md" }: { spec: CoverSpec; title: string; className?: string; size?: "sm" | "md" | "lg" }) {
-  const [bg, ink, accent] = spec.palette;
+export const Cover = memo(function Cover({ spec, title, className, size = "md" }: { spec: CoverSpec | null | undefined; title: string; className?: string; size?: "sm" | "md" | "lg" }) {
+  const safeSpec = normalizeCover(spec);
+  const [bg, ink, accent] = safeSpec.palette;
   const shortTitle = title.length > 26 ? `${title.slice(0, 24)}…` : title;
   const words = shortTitle.split(" ");
   const lines: string[] = [];
@@ -80,7 +99,7 @@ export const Cover = memo(function Cover({ spec, title, className, size = "md" }
       <svg viewBox="0 0 120 160" preserveAspectRatio="xMidYMid meet" className="h-full w-full" role="presentation">
         <rect width="120" height="160" fill={bg} />
         <text x="12" y="20" fill={accent} fontSize="7" fontFamily="Inter Variable, sans-serif" fontWeight="700" letterSpacing="1.2">
-          {spec.kicker.toUpperCase()}
+          {safeSpec.kicker.toUpperCase()}
         </text>
         <rect x="12" y="25" width="96" height="0.8" fill={ink} opacity="0.5" />
         {lines.slice(0, 3).map((line, i) => (
@@ -89,7 +108,7 @@ export const Cover = memo(function Cover({ spec, title, className, size = "md" }
           </text>
         ))}
         <g transform="translate(0 -30)">
-          <Motif motif={spec.motif} accent={accent} ink={ink} />
+          <Motif motif={safeSpec.motif} accent={accent} ink={ink} />
         </g>
       </svg>
     </div>

@@ -19,7 +19,7 @@ class S3Storage:
         )
 
     def presigned_get(self, object_key: str, file_name: str, download: bool) -> tuple[str, str]:
-        expires_seconds = 300
+        expires_seconds = self.settings.storage_presigned_ttl_seconds
         disposition = "attachment" if download else "inline"
         url = self.client.generate_presigned_url(
             "get_object",

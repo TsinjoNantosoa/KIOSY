@@ -2,12 +2,14 @@ import secrets
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="KIOSY_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="KIOSY_", extra="ignore", populate_by_name=True
+    )
 
     env: Literal["development", "test", "staging", "production"] = "development"
     database_url: str = "postgresql+psycopg://kiosy:kiosy@localhost:5432/kiosy"
@@ -27,6 +29,7 @@ class Settings(BaseSettings):
     storage_access_key: str = ""
     storage_secret_key: str = Field(default="", repr=False)
     storage_public_origin: str = "http://localhost:9000"
+    storage_presigned_ttl_seconds: int = Field(default=300, ge=1, le=3600)
     max_upload_bytes: int = Field(default=25_000_000, ge=1_000_000)
     qdrant_url: str = "http://localhost:6333"
     email_mode: Literal["mailpit", "smtp", "disabled"] = "mailpit"
@@ -36,11 +39,36 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(default=None, repr=False)
     smtp_from: str = "Kiosy <no-reply@kiosy.example>"
     smtp_starttls: bool = False
-    llm_provider: Literal["azure", "deterministic", "disabled"] = "disabled"
-    azure_openai_api_key: str | None = None
-    azure_openai_endpoint: str | None = None
-    azure_openai_deployment: str | None = None
-    azure_openai_embedding_deployment: str | None = None
+    llm_provider: Literal["azure", "deterministic", "disabled"] = Field(
+        default="disabled",
+        validation_alias=AliasChoices("LLM_PROVIDER", "KIOSY_LLM_PROVIDER"),
+    )
+    azure_openai_api_key: str | None = Field(
+        default=None,
+        repr=False,
+        validation_alias=AliasChoices("AZURE_OPENAI_API_KEY", "KIOSY_AZURE_OPENAI_API_KEY"),
+    )
+    azure_openai_endpoint: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("AZURE_OPENAI_ENDPOINT", "KIOSY_AZURE_OPENAI_ENDPOINT"),
+    )
+    azure_openai_deployment: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("AZURE_OPENAI_DEPLOYMENT", "KIOSY_AZURE_OPENAI_DEPLOYMENT"),
+    )
+    azure_openai_api_version: str = Field(
+        default="2025-01-01-preview",
+        validation_alias=AliasChoices(
+            "AZURE_OPENAI_API_VERSION", "KIOSY_AZURE_OPENAI_API_VERSION"
+        ),
+    )
+    azure_openai_embedding_deployment: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+            "KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+        ),
+    )
     embedding_namespace_version: str = "v1"
     enable_live_azure: bool = False
     run_max_delegations: int = 4

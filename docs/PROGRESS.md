@@ -1,6 +1,6 @@
 # Progression MVP P0 — Kiosy
 
-Dernière mise à jour : 7 octobre 2026. Source métier : `Cahier_des_charges_Kiosy_v1.pdf`, versionné dans le dépôt (SHA-256 vérifié : `DF894BEAF66463B3015962DD1B72EFA5819CE6044021118C5213FD16B3B9DBB9`).
+Dernière mise à jour : 12 octobre 2026. Source métier : `Cahier_des_charges_Kiosy_v1.pdf`, versionné dans le dépôt (SHA-256 vérifié : `DF894BEAF66463B3015962DD1B72EFA5819CE6044021118C5213FD16B3B9DBB9`).
 
 | Exigence | Module | Implémentation | Test | État |
 |----------|--------|----------------|------|------|
@@ -8,21 +8,21 @@ Dernière mise à jour : 7 octobre 2026. Source métier : `Cahier_des_charges_Ki
 | API FastAPI persistante | `backend/app` | 88 routes OpenAPI | `test_api_flow.py` | DONE |
 | Auth session + CSRF + rôles | `core/security`, `api/auth` | cookies HttpOnly | `test_api_flow.py` | DONE |
 | Commerce idempotent + quota PG | `commerce_service` | devis, commande, test payment | `test_quota_concurrency.py`, `test_payment_edges.py` | DONE |
-| Fichiers privés S3 | `domains/storage` | URLs signées | partiel offline | PARTIAL |
+| Fichiers privés S3 | `domains/storage` | URLs signées | S3Mock réel : upload, lecture, renouvellement, révocation | PARTIAL_LOCAL |
 | RAG Qdrant + ACL | `ai/retrieval` | index + revalidation + namespace embedding | `test_rag.py` | DONE |
 | 3 serveurs MCP Streamable HTTP | `mcp/servers.py` | `/mcp/{catalog,commerce,assistance}` | `test_mcp.py` | DONE |
 | KIA → clients MCP réels | `mcp/invoke.py`, `ai/orchestration.py` | spécialistes via `mcp.Client` | `test_orchestration_mcp.py`, `test_worker.py` | DONE |
 | Multi-agent coopératif | LangGraph | catalogue → droits → conditions | `test_worker.py` | DONE |
 | Worker durable + reprise | `workers/runner.py` | lease, heartbeat, fencing, retry, outbox | `test_worker.py` | DONE |
-| SSE runs | `api/assistant.py` | seq + heartbeat + polling | manuel / E2E | PARTIAL |
+| SSE runs | `api/assistant.py` | seq + heartbeat + reprise | tests HTTP passés ; test coupure TCP bloqué localement | PARTIAL_LOCAL |
 | Propositions + 409 expiré | `api/proposals.py` | revalidation serveur | `test_proposals.py` | DONE |
 | Reprise run après approbation KIA | assistant + worker | `Command(resume=...)` sur le même thread | `test_worker.py` | DONE |
 | Audit trail | `domains/audit.py` | auth, commerce, support, admin, propositions | `test_audit.py` + tests API | DONE |
 | Limites IA appliquées | config + orchestration | outils, LLM, tokens, temps, débit, concurrence | `test_orchestration_mcp.py` | DONE |
-| Azure OpenAI live | `ai/providers.py` | adaptateur + opt-in | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL |
+| Azure OpenAI live | `ai/providers.py` | Chat Completions + diagnostic opt-in | clé réelle absente | BLOCKED_EXTERNAL |
 | Déploiement Render/Vercel | `render.yaml`, `frontend/vercel.json` | config sécurisée et validée statiquement | déploiement réel non exécuté | BLOCKED_EXTERNAL |
 | Dataset 80 scénarios IA | dataset + harnais déterministe | 7 catégories réelles | 80/80 offline | DONE |
-| 15 cas recette T01–T15 | tests + docs | couverture partielle automatisée | voir `docs/TEST_REPORT.md` | PARTIAL |
+| 15 cas recette T01–T15 | tests + docs | couverture automatisée locale | voir `docs/TEST_REPORT.md` | DONE_LOCAL |
 
 ## Travail de cette passe
 
@@ -171,6 +171,18 @@ Statut phase 14 : **PASS BACKEND INTÉGRÉ**, **E2E NAVIGATEUR API BLOCKED_EXTER
 - Les seuls blocages restants sont explicitement externes/environnementaux : Azure live, run GitHub Actions, déploiement Render/Vercel, navigateur API hébergé, pull S3Mock local et MyPy Windows.
 
 Statut phase 15 : **TERMINÉE**.
+
+### Phase 16 — finition Azure, S3 et SSE du 12 octobre 2026
+
+- L'adaptateur Azure utilise désormais `AzureOpenAI` Chat Completions avec l'endpoint brut, le deployment et `AZURE_OPENAI_API_VERSION`. Les noms de variables non préfixés demandés et les variantes `KIOSY_` sont acceptés.
+- Le diagnostic Azure borné couvre chat, tool calling, structured output, timeout et erreur contrôlée. Son exécution locale s'arrête avant tout appel avec `AI_NOT_CONFIGURED`. Une clé apparue ensuite dans `.env.example` a été retirée, n'était pas dans `HEAD` et doit être révoquée ; les scénarios KIA live et le RAG embeddings restent `BLOCKED_EXTERNAL` jusqu'à rotation.
+- S3Mock 5.1.0 est lancé et testé réellement : upload, lecture privée, droit, URL signée courte, nouvelle URL et refus 403 après révocation. Le mock ne rejette pas une URL déjà signée après échéance ; cette propriété doit être confirmée sur le stockage managé.
+- SSE dispose de tests passés pour connexion, ordre, `after_seq`, `Last-Event-ID`, heartbeat, attentes utilisateur/approbation, complétion, reprise logique, session expirée et accès inter-utilisateur 403. Un test Uvicorn/httpx de vraie coupure TCP a été ajouté ; son exécution est bloquée localement par `grpc/cygrpc`, puis par un timeout de build Linux à 304 secondes.
+- Backend : compilation et Ruff passent ; 34/34 tests passent ensemble, puis le nouveau test unitaire Azure passe séparément. Frontend : installation propre, typecheck, lint, 48/48 Vitest, deux builds et 22/22 Playwright passent.
+- MyPy a réellement été exécuté et signale 163 erreurs historiques dans 21 fichiers. `npm audit fix` sans rupture réduit les alertes de 11 à 10 ; les restantes exigent des migrations majeures Vitest/Tailwind.
+- La CI inclut PostgreSQL, Qdrant et S3Mock. Azure live reste un job opt-in conditionné par `RUN_AZURE_LIVE_TESTS=true` et des secrets GitHub.
+
+Statut phase 16 : **TERMINÉE LOCALEMENT AVEC BLOCAGES EXTERNES EXPLICITES**.
 
 ## Prochaine étape
 

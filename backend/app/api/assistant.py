@@ -288,9 +288,11 @@ def start_run(
 
 
 def owned_run(db: Session, run_id: str, user: User) -> Run:
-    row = db.scalar(select(Run).where(Run.id == run_id, Run.user_id == user.id))
+    row = db.get(Run, run_id)
     if not row:
         raise DomainError(404, "NOT_FOUND", "Run introuvable.")
+    if row.user_id != user.id:
+        raise DomainError(403, "FORBIDDEN", "Ce run appartient à un autre compte.")
     return row
 
 
@@ -304,21 +306,23 @@ def run_events(
     request: Request,
     run_id: str,
     after_seq: int = Query(default=0, ge=0),
+    last_event_id: int | None = Header(default=None, alias="Last-Event-ID", ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     owned_run(db, run_id, user)
+    cursor_start = max(after_seq, last_event_id or 0)
     if "text/event-stream" not in request.headers.get("accept", ""):
         rows = db.scalars(
             select(RunEvent)
-            .where(RunEvent.run_id == run_id, RunEvent.seq > after_seq)
+            .where(RunEvent.run_id == run_id, RunEvent.seq > cursor_start)
             .order_by(RunEvent.seq)
             .limit(200)
         ).all()
         return [event_out(row) for row in rows]
 
     def stream() -> Iterator[str]:
-        cursor = after_seq
+        cursor = cursor_start
         idle = 0
         while idle < 120:
             with SessionLocal() as stream_db:

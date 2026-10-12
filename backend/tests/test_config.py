@@ -38,3 +38,20 @@ def test_production_accepts_explicit_secure_endpoints() -> None:
         smtp_host="smtp.example",
     )
     assert settings.env == "production"
+
+
+def test_azure_configuration_accepts_documented_unprefixed_names(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "azure")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-only-not-a-real-key")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://resource.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-35-turbo")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
+    monkeypatch.setenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "embedding-test")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_provider == "azure"
+    assert settings.azure_openai_endpoint == "https://resource.openai.azure.com/"
+    assert settings.azure_openai_deployment == "gpt-35-turbo"
+    assert settings.azure_openai_api_version == "2025-01-01-preview"
+    assert settings.azure_openai_embedding_deployment == "embedding-test"

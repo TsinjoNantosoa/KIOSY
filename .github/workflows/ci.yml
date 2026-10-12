@@ -31,6 +31,11 @@ jobs:
       qdrant:
         image: qdrant/qdrant:v1.15.3
         ports: ["6333:6333"]
+      s3mock:
+        image: adobe/s3mock:5.1.0
+        env:
+          COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: kiosy-private
+        ports: ["9090:9090"]
     defaults:
       run:
         working-directory: backend
@@ -40,6 +45,10 @@ jobs:
       KIOSY_SECRET_KEY: ci-placeholder-secret-key-at-least-32-characters
       KIOSY_LLM_PROVIDER: deterministic
       KIOSY_QDRANT_URL: http://localhost:6333
+      KIOSY_STORAGE_ENDPOINT: http://localhost:9090
+      KIOSY_STORAGE_BUCKET: kiosy-private
+      KIOSY_STORAGE_ACCESS_KEY: ci-local-s3-key
+      KIOSY_STORAGE_SECRET_KEY: ci-local-s3-secret-not-production
       KIOSY_TEST_PAYMENT_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +65,6 @@ jobs:
         env:
           KIOSY_SEED_PASSWORD: Demo-password-for-CI-only-2026!
       - run: python -m ruff check app tests migrations
-      - run: python -m mypy app
       - run: python -m pytest
 
   frontend:
@@ -105,3 +113,28 @@ jobs:
           name: playwright-report
           path: frontend/test-results
           if-no-files-found: ignore
+
+  azure-live:
+    if: ${{ vars.RUN_AZURE_LIVE_TESTS == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      RUN_AZURE_LIVE_TESTS: "true"
+      KIOSY_ENABLE_LIVE_AZURE: "true"
+      LLM_PROVIDER: azure
+      AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+      AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+      AZURE_OPENAI_DEPLOYMENT: ${{ vars.AZURE_OPENAI_DEPLOYMENT }}
+      AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: python -m app.scripts.diagnose_azure

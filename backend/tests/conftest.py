@@ -3,8 +3,6 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
@@ -16,5 +14,8 @@ def database_url() -> str:
 
 @pytest.fixture(scope="session")
 def client(database_url: str):
+    # Import lazily so pure unit tests do not load optional gRPC/Qdrant binaries.
+    from app.main import app
+
     with TestClient(app) as value:
         yield value

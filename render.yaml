@@ -91,6 +91,8 @@ services:
         sync: false
       - key: KIOSY_AZURE_OPENAI_DEPLOYMENT
         sync: false
+      - key: KIOSY_AZURE_OPENAI_API_VERSION
+        value: 2025-01-01-preview
       - key: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT
         sync: false
 
@@ -141,6 +143,8 @@ services:
         fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_ENDPOINT }
       - key: KIOSY_AZURE_OPENAI_DEPLOYMENT
         fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_DEPLOYMENT }
+      - key: KIOSY_AZURE_OPENAI_API_VERSION
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_API_VERSION }
       - key: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT
         fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT }
 
