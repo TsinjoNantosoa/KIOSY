@@ -17,8 +17,8 @@ export function PublicationCard({ item, headingLevel = "h3" }: { item: CatalogIt
   const Heading = headingLevel;
   const unavailable = edition.availability.state !== "available";
   return (
-    <article className="cv-auto group relative flex flex-col">
-      <Cover spec={publication.cover} title={publication.title} className="transition-transform group-hover:-translate-y-0.5 motion-reduce:transform-none" />
+    <article className="cv-auto group relative flex min-w-0 w-full flex-col">
+      <Cover spec={publication.cover} title={publication.title} className="w-full transition-transform group-hover:-translate-y-0.5 motion-reduce:transform-none" />
       <div className="mt-3 flex flex-1 flex-col">
         <p className="text-xs font-medium uppercase tracking-wider text-warm">{t.universe[publication.universe]}</p>
         <Heading className="mt-1 font-serif text-lg font-semibold leading-snug">
@@ -60,7 +60,7 @@ export function PublicationGrid({ items, headingLevel, wide = false }: { items: 
   return (
     <ul className={wide ? "grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-6" : "grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4"}>
       {items.map((item) => (
-        <li key={item.publication.id} className="flex">
+        <li key={item.publication.id} className="flex min-w-0">
           <PublicationCard item={item} headingLevel={headingLevel} />
         </li>
       ))}

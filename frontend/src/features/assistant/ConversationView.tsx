@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Bot, CheckCircle2, Circle, Loader2, Send, Square, User, WifiOff, XCircle } from "lucide-react";
+import { Bot, CheckCircle2, Circle, Loader2, LogIn, Send, Square, User, UserPlus, WifiOff, XCircle } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { appConfig, brand, isDemo } from "@/config/app";
 import { isApiError } from "@/contracts/errors";
 import type { AgentRun, Message } from "@/contracts/models";
 import { RunStatusBadge } from "@/components/StatusBadges";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Alert, InlineError, LoadingBlock } from "@/components/ui/Feedback";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { t } from "@/locales";
-import { useTimeZone } from "@/features/auth/session";
+import { useSession, useTimeZone } from "@/features/auth/session";
 import { MessageBlocks, messageKind } from "./MessageBlocks";
+import { assistantPanel } from "./panelState";
 import { isActive, useConversation, useRunFollower, useSendMessage } from "./useAssistant";
 
 const SUGGESTIONS = [
@@ -33,6 +35,8 @@ export function ConversationView({
   className?: string;
 }) {
   const tz = useTimeZone();
+  const session = useSession();
+  const location = useLocation();
   const { conversation, messages } = useConversation(conversationId);
   const [runId, setRunId] = useState<string | null>(null);
   // Reprise après rechargement : le serveur indique le run encore actif de la conversation.
@@ -76,6 +80,41 @@ export function ConversationView({
 
   const list = messages.data ?? [];
   const runInProgressError = isApiError(mutation.error) && mutation.error.code === "RUN_IN_PROGRESS";
+
+  if (session.status === "loading") {
+    return <div className={cn("flex-1 p-4", className)}><LoadingBlock lines={4} /></div>;
+  }
+
+  if (session.status === "anonymous") {
+    const returnTo = `${location.pathname}${location.search}`;
+    return (
+      <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
+        <div className="flex flex-1 flex-col justify-center px-5 py-8">
+          <div className="mx-auto max-w-md text-center">
+            <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-brand-soft text-brand" aria-hidden>
+              <Bot className="h-6 w-6" />
+            </span>
+            <h2 className="mt-4 font-serif text-xl font-semibold">Connectez-vous pour discuter avec {brand.assistantName}</h2>
+            <p className="mt-2 text-sm leading-6 text-ink-muted">
+              Votre session protège l'historique de vos conversations et permet à {brand.assistantName} de vérifier vos accès sans les exposer à un autre utilisateur.
+            </p>
+            <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+              <ButtonLink to={`/connexion?retour=${encodeURIComponent(returnTo)}`} onClick={() => assistantPanel.close()} icon={<LogIn className="h-4 w-4" aria-hidden />}>
+                Se connecter
+              </ButtonLink>
+              <ButtonLink to={`/inscription?retour=${encodeURIComponent(returnTo)}`} onClick={() => assistantPanel.close()} variant="outline" icon={<UserPlus className="h-4 w-4" aria-hidden />}>
+                Créer un compte
+              </ButtonLink>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (session.status === "unavailable") {
+    return <div className={cn("flex-1 p-4", className)}><InlineError error={session.error} /></div>;
+  }
 
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
