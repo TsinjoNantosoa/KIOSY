@@ -258,6 +258,8 @@ def process_assistant(payload: dict[str, Any], graph: Any, claim: ClaimedTask) -
             append_event(db, run, "status", {"status": status})
             return
         blocks = [{"type": "text", "markdown": result["answer"]}]
+        if result.get("publications"):
+            blocks.append({"type": "publications", "items": result["publications"]})
         if result.get("citations"):
             blocks.append({"type": "citations", "items": result["citations"]})
         message = Message(

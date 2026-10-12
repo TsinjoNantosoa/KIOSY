@@ -36,6 +36,8 @@ def test_specialists_invoke_real_mcp_tools(database_url: str) -> None:
     assert result["tool_call_count"] <= result["limits"]["max_tool_calls"]
     assert tools.intersection({"get_my_subscriptions", "read_my_entitlements", "check_entitlement"})
     assert tools.intersection({"search_terms", "get_authorized_excerpt", "search_conditions"})
+    assert result["citations"]
+    assert all(item.get("effective_date") for item in result["citations"])
 
 
 def test_support_intent_routes_to_dedicated_specialist(database_url: str) -> None:

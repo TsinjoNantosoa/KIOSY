@@ -115,6 +115,7 @@ def get_contract_excerpt(
                     "section_id": section["id"],
                     "title": section["title"],
                     "quote": section["body"][:500],
+                    "effective_date": iso(document.effective_at),
                     "href": f"/conditions/{document_id}?version={version}#{section['id']}",
                 }
                 for section in sections[:3]
@@ -385,6 +386,7 @@ def search_conditions(context_token: str, version: str, query: str = "") -> dict
                     "section_id": section["id"],
                     "title": section["title"],
                     "quote": section["body"][:500],
+                    "effective_date": iso(document.effective_at),
                     "href": f"/conditions/vente?version={version}#{section['id']}",
                 }
                 for section in sections[:5]
@@ -451,6 +453,7 @@ def get_authorized_excerpt(
                 "version": row.version,
                 "section": row.page_or_section,
                 "quote": row.text[:500],
+                "effective_date": iso(row.effective_at),
                 "href": f"/lecteur/{row.document_id}?version={row.version}#{row.page_or_section}",
             }
             for row in rows

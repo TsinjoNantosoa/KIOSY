@@ -159,12 +159,16 @@ function Citations({ items }: { items: Citation[] }) {
       <ol className="space-y-3">
         {items.map((c, i) => {
           const link = c.href ? classifyLink(c.href) : null;
+          // Les conversations créées avant l'ajout de cette métadonnée doivent rester ouvrables.
+          const effectiveDate = typeof c.effective_date === "string" && !Number.isNaN(Date.parse(c.effective_date))
+            ? formatDate(c.effective_date, tz)
+            : null;
           return (
             <li key={c.id} className="text-sm">
               <p className="font-medium">
                 [{i + 1}] {c.document_title} — {c.section}
               </p>
-              <p className="text-xs text-ink-subtle">Version {c.version} · en vigueur depuis le {formatDate(c.effective_date, tz)}</p>
+              <p className="text-xs text-ink-subtle">Version {c.version}{effectiveDate ? ` · en vigueur depuis le ${effectiveDate}` : ""}</p>
               <blockquote className="mt-1 border-l-2 border-line pl-3 text-ink-muted">« {c.quote} »</blockquote>
               {link?.kind === "internal" ? (
                 <Link to={link.to} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand underline">
