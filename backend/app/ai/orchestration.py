@@ -25,6 +25,8 @@ class AgentResult(BaseModel):
 
 class KiosyState(TypedDict, total=False):
     text: str
+    search_text: str
+    history: list[str]
     user_id: str
     trace_id: str
     limits: dict[str, Any]
@@ -33,7 +35,7 @@ class KiosyState(TypedDict, total=False):
     filtered: list[dict[str, Any]]
     publications: list[dict[str, Any]]
     subscriptions: list[dict[str, Any]]
-    citations: list[dict[str, Any]]
+    citations: Annotated[list[dict[str, Any]], lambda left, right: left + right]
     pending_proposal_id: str | None
     specialist_results: Annotated[list[dict[str, Any]], lambda left, right: left + right]
     mcp_invocations: Annotated[list[dict[str, Any]], lambda left, right: left + right]
@@ -89,11 +91,36 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
     def usage(client: KiosyMcpClients) -> dict[str, Any]:
         return {"tool_call_count": client.tool_calls}
 
+    def contextualize(state: KiosyState) -> str:
+        text = state["text"].strip()
+        history = state.get("history", [])
+        if not history:
+            return text
+        lowered = text.casefold()
+        follow_up_markers = (
+            "ça",
+            "ca",
+            "celle",
+            "celui",
+            "cette publication",
+            "cette offre",
+            "elle",
+            "lui",
+            "et pour",
+            "est-ce inclus",
+            "est ce inclus",
+        )
+        if len(text.split()) <= 8 or any(marker in lowered for marker in follow_up_markers):
+            recent = "\n".join(history[-4:])
+            return f"Contexte récent:\n{recent}\nQuestion actuelle: {text}"[:4000]
+        return text
+
     def coordinate(state: KiosyState) -> dict[str, Any]:
         ensure_active_budget(state)
         ensure_llm_budget(state)
         text = state["text"]
-        input_tokens = estimated_tokens(text)
+        search_text = contextualize(state)
+        input_tokens = estimated_tokens(search_text)
         ensure_token_budget(state, input_tokens)
         lowered = text.casefold()
         forbidden_requests = {
@@ -144,7 +171,7 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
                 "tokens_input": state.get("tokens_input", 0) + input_tokens,
                 "workflow_status": "completed",
             }
-        intent = provider.classify(text)
+        intent = provider.classify(search_text)
         vague_subscription = not state.get("clarification") and (
             ("quelque chose" in lowered and "abonnement" in lowered)
             or (
@@ -181,10 +208,18 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
         )
         purchase_requested = any(
             word in lowered
-            for word in ("abonne-moi", "achète", "acheter", "commande cette", "je veux m'abonner")
+            for word in (
+                "abonne-moi",
+                "achète",
+                "acheter",
+                "commande cette",
+                "je veux m'abonner",
+                "je veux souscrire",
+            )
         )
         return {
             "intent": intent,
+            "search_text": search_text,
             "needs_clarification": vague_subscription,
             "action_requested": purchase_requested or cancellation_requested or support_case_requested,
             "action_kind": "cancel_subscription"
@@ -218,18 +253,24 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
 
     def catalog_specialist(state: KiosyState) -> dict[str, Any]:
         client = mcp(state)
-        text = state["text"]
+        text = state.get("search_text", state["text"])
         lowered = text.casefold()
         requested_universe = next(
             (name for name in ("culture", "presse", "business") if name in lowered), None
         )
+        if requested_universe is None and any(
+            marker in lowered for marker in ("activité", "activite", "entreprise", "international")
+        ):
+            requested_universe = "business"
         publication_index = lowered.find("publication")
         if publication_index >= 0:
             search_query = text[publication_index : publication_index + 120].strip(" .!?…")
-        elif requested_universe or any(
+        elif requested_universe:
+            search_query = ""
+        elif any(
             marker in lowered for marker in ("conseill", "recommand", "lecture", "offre", "tarif", "prix")
         ):
-            search_query = ""
+            search_query = text[:300]
         else:
             search_query = text[:200] if len(text.split()) <= 5 else ""
         search = client.call(
@@ -241,9 +282,43 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
             universe=requested_universe,
             limit=8,
         )
+        if search_query and not search.get("items"):
+            search = client.call(
+                catalog_mcp,
+                "catalog",
+                ["catalog:read"],
+                "search_publications",
+                query="",
+                universe=requested_universe,
+                limit=8,
+            )
+        content_search = client.call(
+            assistance_mcp,
+            "assistance",
+            ["documents:read"],
+            "search_authorized_content",
+            query=state["text"][:500],
+            limit=3,
+        )
+        content_passages = content_search.get("passages", [])
+        content_by_publication = {
+            item.get("publication_id"): item for item in content_passages if item.get("publication_id")
+        }
+        content_citations = [
+            {
+                "id": item["passage_id"],
+                "document_title": item["document_title"],
+                "section": item["section"],
+                "quote": item["quote"],
+                "version": item["version"],
+                "effective_date": item.get("effective_date"),
+                "href": item.get("href"),
+            }
+            for item in content_passages
+        ]
         candidates: list[dict[str, Any]] = []
         offer_ids: list[str] = []
-        candidate_limit = 4
+        candidate_limit = 3
         search_items = search.get("items", [])
         publications = [
             {
@@ -255,7 +330,11 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
                 "universe": item["publication"]["universe"],
                 "summary": item["publication"].get("summary", ""),
                 "cover": item["publication"].get("cover") or {},
-                "reason": f"Publication disponible dans l'univers {item['publication']['universe']}.",
+                "reason": (
+                    "Contenu pertinent retrouvé dans cette publication."
+                    if item["publication"]["id"] in content_by_publication
+                    else f"Publication disponible dans l'univers {item['publication']['universe']}."
+                ),
             }
             for item in search_items[:4]
         ]
@@ -275,6 +354,9 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
                         "offer_id": offer["id"],
                         "title": offer["title"],
                         "price": offer["price"],
+                        "kind": offer["kind"],
+                        "duration": offer.get("duration"),
+                        "renewal": offer.get("renewal", "none"),
                         "conditions_version": offer["conditions_version"],
                         "scope": offer.get("scope", {}),
                         "universe": item["publication"].get("universe"),
@@ -300,6 +382,7 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
         return {
             "candidates": candidates,
             "publications": publications,
+            "citations": content_citations,
             "specialist_results": [result.model_dump()],
             "mcp_invocations": client.invocations,
             "delegations": state.get("delegations", 0) + 1,
@@ -381,7 +464,7 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
                 ["documents:read"],
                 "search_terms",
                 version=fallback_version,
-                query=state["text"][:120] or "vente",
+                query="",
             )
             for passage in terms.get("passages", []):
                 citations.append(
@@ -509,13 +592,25 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
         offers = state.get("filtered") or state.get("candidates", [])
         if not offers:
             return {"workflow_status": "completed"}
+        lowered = state["text"].casefold()
+        if any(marker in lowered for marker in ("souscri", "abonnement", "m'abonner")):
+            selected = next((item for item in offers if item.get("kind") == "subscription"), offers[0])
+        else:
+            selected = next(
+                (
+                    item
+                    for item in offers
+                    if item.get("kind") != "free" and item.get("price", {}).get("amount", 0) > 0
+                ),
+                offers[0],
+            )
         client = mcp(state)
         prepared = client.call(
             commerce_mcp,
             "commerce",
             ["purchase:prepare"],
             "prepare_purchase",
-            offer_id=offers[0]["offer_id"],
+            offer_id=selected["offer_id"],
         )
         return {
             "pending_proposal_id": prepared.get("proposal_id"),
@@ -597,7 +692,7 @@ def build_graph(provider: LlmProvider, checkpointer: Any | None = None):
         composed_input = state["text"] + "\n" + "\n".join(evidence)
         input_tokens = estimated_tokens(composed_input)
         ensure_token_budget(state, input_tokens)
-        answer = provider.compose(state["text"], evidence)
+        answer = provider.compose(state["text"], evidence, state.get("history"))
         output_tokens = estimated_tokens(answer)
         ensure_token_budget(state, input_tokens + output_tokens)
         return {

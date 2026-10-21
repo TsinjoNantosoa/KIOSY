@@ -9,13 +9,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.schemas import StartRunInput
+from app.api.schemas import MessageFeedbackInput, StartRunInput
 from app.api.serializers import iso
 from app.core.config import Settings, get_settings
 from app.core.errors import DomainError
 from app.core.security import current_user, utcnow
 from app.db.base import SessionLocal, get_db
-from app.db.models import Conversation, Message, OutboxEvent, Run, RunEvent, User
+from app.db.models import Conversation, Message, MessageFeedback, OutboxEvent, Run, RunEvent, User
 from app.domains.commerce_service import enqueue
 from app.domains.idempotency import begin, complete
 
@@ -116,6 +116,44 @@ def messages(
             select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at)
         )
     ]
+
+
+@router.post("/messages/{message_id}/feedback")
+def message_feedback(
+    message_id: str,
+    payload: MessageFeedbackInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    message = db.scalar(
+        select(Message)
+        .join(Conversation, Conversation.id == Message.conversation_id)
+        .where(
+            Message.id == message_id,
+            Message.role == "assistant",
+            Conversation.user_id == user.id,
+        )
+    )
+    if not message:
+        raise DomainError(404, "NOT_FOUND", "Réponse KIA introuvable.")
+    feedback = db.scalar(
+        select(MessageFeedback).where(
+            MessageFeedback.message_id == message.id, MessageFeedback.user_id == user.id
+        )
+    )
+    if feedback:
+        feedback.rating = payload.rating
+        feedback.reason = payload.reason.strip() if payload.reason else None
+    else:
+        feedback = MessageFeedback(
+            message_id=message.id,
+            user_id=user.id,
+            rating=payload.rating,
+            reason=payload.reason.strip() if payload.reason else None,
+        )
+        db.add(feedback)
+    db.commit()
+    return {"message_id": message.id, "rating": feedback.rating, "reason": feedback.reason}
 
 
 @router.post("/conversations/{conversation_id}/runs", status_code=202)

@@ -187,7 +187,7 @@ async def complete_test_payment(
     process_test_outcome(db, attempt, outcome, f"browser-{session_id}-{outcome}")
     db.commit()
     frontend = settings.frontend_origins[0]
-    return RedirectResponse(f"{frontend}/paiement/retour?order_id={attempt.order_id}", status_code=303)
+    return RedirectResponse(f"{frontend}/commande/{attempt.order_id}/retour", status_code=303)
 
 
 def process_test_outcome(db: Session, attempt: PaymentAttempt, outcome: str, event_id: str) -> None:

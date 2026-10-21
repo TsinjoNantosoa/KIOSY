@@ -55,6 +55,7 @@ def test_azure_provider_uses_requested_endpoint_version_and_chat_deployment(monk
         ("Salut, qui êtes-vous ?", "general"),
         ("Puis-je avoir une réduction de 50 % aujourd'hui ?", "conditions"),
         ("Compare une offre business sans repayer mes accès", "cooperate"),
+        ("Je possède cette publication mais je n’arrive pas à l’ouvrir.", "support"),
     ],
 )
 def test_rule_based_intent_covers_common_kia_requests(text: str, expected: str) -> None:

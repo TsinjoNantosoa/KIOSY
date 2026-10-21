@@ -106,6 +106,11 @@ class StartRunInput(StrictModel):
     text: NonBlank = Field(max_length=8_000)
 
 
+class MessageFeedbackInput(StrictModel):
+    rating: Literal[-1, 1]
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class SupportCreateInput(StrictModel):
     category: Literal["access", "payment", "subscription", "content", "other"]
     subject: NonBlank = Field(max_length=240)

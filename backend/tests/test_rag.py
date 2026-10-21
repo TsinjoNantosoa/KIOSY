@@ -31,6 +31,7 @@ def test_rag_revalidates_acl_and_withdraws_content(database_url: str) -> None:
     index = RetrievalIndex(get_settings(), DeterministicProvider(), QdrantClient(":memory:"))
     private_id = f"edition-{secrets.token_hex(6)}"
     public_id = f"public-{secrets.token_hex(6)}"
+    marker = f"ragmarker{secrets.token_hex(8)}"
     with SessionLocal.begin() as db:
         user = User(
             email=f"rag-{secrets.token_hex(6)}@example.com",
@@ -45,14 +46,14 @@ def test_rag_revalidates_acl_and_withdraws_content(database_url: str) -> None:
             index.index(
                 db,
                 [
-                    passage(private_id, "entitled", "contenu privé kiosy"),
-                    passage(public_id, "public", "notice publique kiosy"),
+                    passage(private_id, "entitled", f"contenu privé {marker}"),
+                    passage(public_id, "public", f"notice publique {marker}"),
                 ],
             )
             == 2
         )
     with SessionLocal() as db:
-        without_right = index.search(db, user_id, "kiosy", limit=10)
+        without_right = index.search(db, user_id, marker, limit=10)
         assert {row.document_id for row in without_right} == {public_id}
     with SessionLocal.begin() as db:
         db.add(
@@ -67,12 +68,12 @@ def test_rag_revalidates_acl_and_withdraws_content(database_url: str) -> None:
             )
         )
     with SessionLocal() as db:
-        with_right = index.search(db, user_id, "kiosy", limit=10)
+        with_right = index.search(db, user_id, marker, limit=10)
         assert {row.document_id for row in with_right} == {public_id, private_id}
     with SessionLocal.begin() as db:
         assert index.withdraw(db, private_id) == 1
     with SessionLocal() as db:
-        after_withdrawal = index.search(db, user_id, "kiosy", limit=10)
+        after_withdrawal = index.search(db, user_id, marker, limit=10)
         assert {row.document_id for row in after_withdrawal} == {public_id}
 
 

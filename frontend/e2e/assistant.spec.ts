@@ -54,9 +54,8 @@ test("KIA : un visiteur est invité à se connecter pour une demande personnelle
   await page.goto("/");
   await page.getByRole("button", { name: /^KIA/ }).click();
   const panel = page.getByRole("dialog");
-  await panel.getByLabel("Message pour KIA").fill("Pourquoi je n'ai plus accès à mon abonnement ?");
-  await panel.getByLabel("Message pour KIA").press("Enter");
   await expect(panel.getByRole("link", { name: "Se connecter" })).toBeVisible({ timeout: 10_000 });
+  await expect(panel.getByLabel("Message pour KIA")).toHaveCount(0);
 });
 
 test("problème d'accès : KIA diagnostique et propose une demande d'assistance", async ({ page }) => {

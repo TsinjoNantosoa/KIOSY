@@ -203,6 +203,29 @@ def test_sse_rejects_other_user_and_expired_session(database_url: str, client: T
     assert expired.json()["code"] == "UNAUTHENTICATED"
 
 
+@pytest.mark.parametrize("terminal_status", ["failed", "cancelled"])
+def test_sse_emits_terminal_failure_and_cancellation(
+    database_url: str, client: TestClient, terminal_status: str
+) -> None:
+    user_id = register(client)
+    run_id = create_run(user_id, ["running", terminal_status], terminal_status)
+
+    response = client.get(
+        f"/v1/runs/{run_id}/events", headers={"Accept": "text/event-stream"}
+    )
+    payloads = [
+        json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")
+    ]
+
+    assert response.status_code == 200
+    assert [item["seq"] for item in payloads] == [1, 2]
+    assert payloads[-1]["status"] == terminal_status
+    with SessionLocal() as db:
+        run = db.get(Run, run_id)
+        assert run is not None
+        assert run.status == terminal_status
+
+
 def test_real_sse_disconnect_and_reconnect_keeps_run_healthy(
     database_url: str, sse_http_base: str
 ) -> None:

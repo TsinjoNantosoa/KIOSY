@@ -39,9 +39,34 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(default=None, repr=False)
     smtp_from: str = "Kiosy <no-reply@kiosy.example>"
     smtp_starttls: bool = False
-    llm_provider: Literal["azure", "deterministic", "disabled"] = Field(
+    llm_provider: Literal["azure", "openai", "deterministic", "disabled"] = Field(
         default="disabled",
         validation_alias=AliasChoices("LLM_PROVIDER", "KIOSY_LLM_PROVIDER"),
+    )
+    embedding_provider: Literal["same", "azure", "openai", "deterministic", "disabled"] = Field(
+        default="same",
+        validation_alias=AliasChoices("EMBEDDING_PROVIDER", "KIOSY_EMBEDDING_PROVIDER"),
+    )
+    openai_api_key: str | None = Field(
+        default=None,
+        repr=False,
+        validation_alias=AliasChoices("OPENAI_API_KEY", "KIOSY_OPENAI_API_KEY"),
+    )
+    openai_chat_model: str = Field(
+        default="gpt-6-astra",
+        validation_alias=AliasChoices("OPENAI_CHAT_MODEL", "KIOSY_OPENAI_CHAT_MODEL"),
+    )
+    openai_embedding_model: str = Field(
+        default="text-embedding-3-small",
+        validation_alias=AliasChoices("OPENAI_EMBEDDING_MODEL", "KIOSY_OPENAI_EMBEDDING_MODEL"),
+    )
+    openai_embedding_dimensions: int | None = Field(
+        default=None,
+        ge=256,
+        le=3072,
+        validation_alias=AliasChoices(
+            "OPENAI_EMBEDDING_DIMENSIONS", "KIOSY_OPENAI_EMBEDDING_DIMENSIONS"
+        ),
     )
     azure_openai_api_key: str | None = Field(
         default=None,
@@ -71,6 +96,15 @@ class Settings(BaseSettings):
     )
     embedding_namespace_version: str = "v1"
     enable_live_azure: bool = False
+    enable_live_openai: bool = True
+    rag_score_threshold: float = Field(default=0.28, ge=0.0, le=1.0)
+    rag_dense_weight: float = Field(default=0.65, ge=0.0, le=1.0)
+    rag_lexical_weight: float = Field(default=0.35, ge=0.0, le=1.0)
+    rag_candidate_limit: int = Field(default=24, ge=6, le=100)
+    rag_context_limit: int = Field(default=6, ge=1, le=12)
+    rag_chunk_target_chars: int = Field(default=2400, ge=500, le=8000)
+    rag_chunk_overlap_chars: int = Field(default=300, ge=0, le=2000)
+    conversation_context_messages: int = Field(default=8, ge=0, le=30)
     run_max_delegations: int = 4
     run_max_tool_calls: int = 12
     run_max_llm_calls: int = 6
@@ -121,6 +155,10 @@ class Settings(BaseSettings):
     def production_has_no_local_or_insecure_fallback(self) -> "Settings":
         if self.worker_heartbeat_seconds >= self.worker_lease_seconds:
             raise ValueError("worker heartbeat must be shorter than its lease")
+        if self.rag_dense_weight + self.rag_lexical_weight <= 0:
+            raise ValueError("at least one RAG ranking weight must be positive")
+        if self.rag_chunk_overlap_chars >= self.rag_chunk_target_chars:
+            raise ValueError("RAG chunk overlap must be shorter than the target chunk")
         if self.env != "production":
             return self
         local_markers = ("localhost", "127.0.0.1", "[::1]")

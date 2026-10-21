@@ -83,3 +83,4 @@ INFO:     127.0.0.1:53066 - "GET /v1/conversations/da90bbc9-83b1-4f4f-9db1-8544c
 INFO:     127.0.0.1:56746 - "GET /v1/conversations/da90bbc9-83b1-4f4f-9db1-8544c91caea7/messages HTTP/1.1" 200 OK
 INFO:     127.0.0.1:60450 - "GET /v1/conversations/ce699b6f-e638-4162-a279-1daaae199f9b HTTP/1.1" 200 OK
 INFO:     127.0.0.1:58060 - "GET /v1/conversations/ce699b6f-e638-4162-a279-1daaae199f9b/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59413 - "GET /health/live HTTP/1.1" 200 OK

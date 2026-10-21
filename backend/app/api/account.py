@@ -7,7 +7,16 @@ from app.core.config import Settings, get_settings
 from app.core.errors import DomainError
 from app.core.security import current_user, utcnow
 from app.db.base import get_db
-from app.db.models import Asset, Edition, Entitlement, Publication, Publisher, Subscription, User
+from app.db.models import (
+    Asset,
+    Edition,
+    EditorialStatus,
+    Entitlement,
+    Publication,
+    Publisher,
+    Subscription,
+    User,
+)
 from app.domains.storage import S3Storage
 
 router = APIRouter(prefix="/v1")
@@ -79,7 +88,11 @@ def access(publication_id: str, db: Session = Depends(get_db), user: User = Depe
         raise DomainError(404, "NOT_FOUND", "Publication introuvable.")
     rights = active_entitlements(db, user.id)
     editions = db.scalars(select(Edition).where(Edition.publication_id == publication.id)).all()
-    readable = [edition.id for edition in editions if can_read(edition, publication, rights)]
+    readable = [
+        edition.id
+        for edition in editions
+        if edition.status == EditorialStatus.published and can_read(edition, publication, rights)
+    ]
     return {
         "publication_id": publication.id,
         "readable_edition_ids": readable,
@@ -90,7 +103,7 @@ def access(publication_id: str, db: Session = Depends(get_db), user: User = Depe
 @router.get("/editions/{edition_id}/asset")
 def edition_asset(edition_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     edition = db.get(Edition, edition_id)
-    if not edition or not edition.asset_id:
+    if not edition or edition.status != EditorialStatus.published or not edition.asset_id:
         raise DomainError(404, "NOT_FOUND", "Fichier introuvable.")
     publication = db.get(Publication, edition.publication_id)
     if not publication or not can_read(edition, publication, active_entitlements(db, user.id)):
@@ -109,6 +122,8 @@ def asset_access(
     if not asset or asset.status != "ready":
         raise DomainError(404, "NOT_FOUND", "Fichier indisponible.")
     edition = db.get(Edition, asset.edition_id)
+    if not edition or edition.status != EditorialStatus.published:
+        raise DomainError(404, "NOT_FOUND", "Fichier indisponible.")
     publication = db.get(Publication, edition.publication_id) if edition else None
     if not edition or not publication or not can_read(edition, publication, active_entitlements(db, user.id)):
         raise DomainError(403, "ACCESS_DENIED", "Vous ne disposez pas du droit de lecture.")

@@ -726,6 +726,8 @@ export function createDemoApi(): KiosyApi {
           }
           return publicRun(db, id);
         }),
+      sendFeedback: (messageId, input) =>
+        handle(() => ({ message_id: messageId, rating: input.rating, reason: input.reason ?? null })),
     },
 
     support: {

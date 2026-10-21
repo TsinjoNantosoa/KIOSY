@@ -10,7 +10,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from sqlalchemy import text
 from starlette.routing import Mount
 
-from app.api import account, admin, admin_views, assistant, auth, catalog, commerce, proposals, support
+from app.api import account, admin, admin_views, assistant, auth, catalog, commerce, proposals, rag, support
 from app.core.config import get_settings
 from app.core.errors import DomainError, install_error_handlers
 from app.core.security import CSRF_BINDING_COOKIE, validate_csrf
@@ -112,6 +112,7 @@ for router in (
     proposals.router,
     admin.router,
     admin_views.router,
+    rag.router,
 ):
     app.include_router(router)
 

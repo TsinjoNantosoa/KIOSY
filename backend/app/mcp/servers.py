@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from datetime import timedelta
 from typing import Any
 
@@ -9,7 +10,7 @@ from mcp.shared.exceptions import MCPError
 from mcp_types import INVALID_PARAMS
 from sqlalchemy import select
 
-from app.ai.providers import provider_from_settings
+from app.ai.providers import embedding_provider_from_settings
 from app.ai.retrieval import RetrievalIndex
 from app.api.account import active_entitlements, subscription_out
 from app.api.serializers import iso, offer_out
@@ -34,6 +35,7 @@ from app.mcp.auth import verify_context
 catalog_mcp = MCPServer("kiosy-catalog")
 commerce_mcp = MCPServer("kiosy-commerce")
 assistance_mcp = MCPServer("kiosy-assistance")
+logger = logging.getLogger(__name__)
 
 
 @catalog_mcp.tool()
@@ -41,7 +43,7 @@ def search_publications(
     context_token: str, query: str = "", universe: str | None = None, limit: int = 5
 ) -> dict[str, Any]:
     """Search published Kiosy publications. Inputs are closed and results are bounded."""
-    verify_context(context_token, "catalog", "catalog:read")
+    context = verify_context(context_token, "catalog", "catalog:read")
     with SessionLocal() as db:
         result = catalog(
             db,
@@ -54,6 +56,43 @@ def search_publications(
             page=1,
             page_size=max(1, min(limit, 10)),
         )
+        if query.strip():
+            settings = get_settings()
+            try:
+                provider = embedding_provider_from_settings(settings)
+                hits = RetrievalIndex(settings, provider).search_with_scores(
+                    db,
+                    context["sub"],
+                    query[:500],
+                    limit=max(1, min(limit, 10)),
+                    source_types={"catalog"},
+                )
+                semantic_ids = [hit.passage.publication_id for hit in hits]
+                if semantic_ids:
+                    complete = catalog(
+                        db,
+                        q=None,
+                        universe=universe,
+                        language=None,
+                        format=None,
+                        price=None,
+                        sort="recent",
+                        page=1,
+                        page_size=100,
+                    )
+                    by_id = {
+                        item["publication"]["id"]: item for item in complete["items"]
+                    }
+                    lexical_ids = [item["publication"]["id"] for item in result["items"]]
+                    ordered_ids = list(dict.fromkeys([*semantic_ids, *lexical_ids]))
+                    result["items"] = [
+                        by_id[item_id] for item_id in ordered_ids if item_id in by_id
+                    ][: max(1, min(limit, 10))]
+                    result["total"] = len(result["items"])
+                    result["retrieval"] = "hybrid"
+            except Exception as error:
+                logger.warning("catalog_semantic_search_unavailable", exc_info=error)
+                result["retrieval"] = "lexical_fallback"
     return result
 
 
@@ -352,6 +391,7 @@ def search_terms(
                     "section_id": section["id"],
                     "title": section["title"],
                     "quote": section["body"][:500],
+                    "effective_date": iso(document.effective_at),
                     "href": f"/conditions/{document_id}?version={version}#{section['id']}",
                 }
                 for section in sections[:5]
@@ -417,6 +457,57 @@ def diagnose_access(context_token: str, edition_id: str) -> dict[str, Any]:
 
 
 @assistance_mcp.tool()
+def search_authorized_content(
+    context_token: str, query: str, limit: int = 3
+) -> dict[str, Any]:
+    """Search publication content while enforcing the current reader entitlements."""
+    context = verify_context(context_token, "assistance", "documents:read")
+    settings = get_settings()
+    try:
+        provider = embedding_provider_from_settings(settings)
+    except DomainError as error:
+        return {"status": "PROVIDER_UNAVAILABLE", "passages": [], "reason": error.code}
+    if not provider.status().embeddings_configured:
+        return {
+            "status": "PROVIDER_UNAVAILABLE",
+            "passages": [],
+            "reason": "EMBEDDINGS_NOT_CONFIGURED",
+        }
+    with SessionLocal() as db:
+        try:
+            hits = RetrievalIndex(settings, provider).search_with_scores(
+                db,
+                context["sub"],
+                query,
+                limit=max(1, min(limit, 6)),
+                source_types={"edition_content"},
+            )
+        except Exception:
+            logger.exception("rag_publication_content_search_failed")
+            return {"status": "NOT_FOUND", "passages": [], "reason": "INDEX_UNAVAILABLE"}
+        passages = [
+            {
+                "passage_id": hit.passage.id,
+                "publication_id": hit.passage.publication_id,
+                "edition_id": hit.passage.edition_id or hit.passage.document_id,
+                "document_id": hit.passage.document_id,
+                "document_title": hit.passage.metadata_json.get("title", "Publication Kiosy"),
+                "version": hit.passage.version,
+                "section": hit.passage.page_or_section,
+                "quote": hit.passage.text[:500],
+                "effective_date": iso(hit.passage.effective_at),
+                "href": (
+                    f"/lecteur/{hit.passage.edition_id or hit.passage.document_id}"
+                    f"#{hit.passage.page_or_section}"
+                ),
+                "score": round(hit.score, 6),
+            }
+            for hit in hits
+        ]
+        return {"status": "ok" if passages else "NOT_FOUND", "passages": passages}
+
+
+@assistance_mcp.tool()
 def get_authorized_excerpt(
     context_token: str,
     query: str,
@@ -427,7 +518,7 @@ def get_authorized_excerpt(
     """Search indexed passages with ACL revalidation; citations are server-built."""
     context = verify_context(context_token, "assistance", "documents:read")
     settings = get_settings()
-    provider = provider_from_settings(settings)
+    provider = embedding_provider_from_settings(settings)
     with SessionLocal() as db:
         if document_id and version:
             fixed = db.scalar(
@@ -438,13 +529,23 @@ def get_authorized_excerpt(
             )
             if fixed:
                 return search_terms(context_token, version=version, query=query, document_id=document_id)
-        if not provider.status().configured:
-            return {"status": "PROVIDER_UNAVAILABLE", "passages": [], "reason": "AI_NOT_CONFIGURED"}
+        if not provider.status().embeddings_configured:
+            return {
+                "status": "PROVIDER_UNAVAILABLE",
+                "passages": [],
+                "reason": "EMBEDDINGS_NOT_CONFIGURED",
+            }
         try:
-            rows = RetrievalIndex(settings, provider).search(
-                db, context["sub"], query, limit=max(1, min(limit, 6))
+            hits = RetrievalIndex(settings, provider).search_with_scores(
+                db,
+                context["sub"],
+                query,
+                limit=max(1, min(limit, 6)),
+                source_types={"edition_content", "contract"},
             )
+            rows = [hit.passage for hit in hits]
         except Exception:
+            logger.exception("rag_authorized_excerpt_failed")
             return {"status": "NOT_FOUND", "passages": [], "reason": "INDEX_UNAVAILABLE"}
         passages = [
             {

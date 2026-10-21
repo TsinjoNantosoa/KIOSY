@@ -220,6 +220,7 @@ export function createHttpApi(): KiosyApi {
         });
       },
       cancelRun: (id) => post(`/v1/runs/${encodeURIComponent(id)}/cancel`),
+      sendFeedback: (id, input) => post(`/v1/messages/${encodeURIComponent(id)}/feedback`, { body: input }),
     },
     support: {
       list: (opts) => get("/v1/me/support-cases", { signal: opts?.signal }),

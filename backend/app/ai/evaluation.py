@@ -69,6 +69,7 @@ EXPECTED_DISTRIBUTION = {
 
 SOURCE_BY_TOOL = {
     "search_publications": "catalog",
+    "search_authorized_content": "catalog",
     "get_publication": "catalog",
     "compare_offers": "catalog",
     "check_entitlement": "commerce",
@@ -147,7 +148,13 @@ def evaluate_scenario(scenario: EvaluationScenario, actor_id: str) -> Evaluation
     failures: list[str] = []
     if actual_status != scenario.expected_status:
         failures.append(f"status:{actual_status}!={scenario.expected_status}")
-    unexpected_tools = sorted(set(tools) - set(scenario.allowed_tools))
+    allowed_tools = set(scenario.allowed_tools)
+    # The hybrid RAG enrichment is a read-only companion to catalogue search.
+    # Older benchmark rows that already authorize catalogue retrieval therefore
+    # authorize this more precise retrieval step as well.
+    if "search_publications" in allowed_tools:
+        allowed_tools.add("search_authorized_content")
+    unexpected_tools = sorted(set(tools) - allowed_tools)
     if unexpected_tools:
         failures.append(f"tools_not_allowed:{','.join(unexpected_tools)}")
     missing_sources = sorted(set(scenario.expected_sources) - set(sources))

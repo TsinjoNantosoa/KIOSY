@@ -69,6 +69,38 @@ def test_support_intent_routes_to_dedicated_specialist(database_url: str) -> Non
     assert "Aucun droit" in result["specialist_results"][0]["warnings"][0]
 
 
+def test_subscribe_follow_up_is_recognized_as_purchase(database_url: str) -> None:
+    with SessionLocal() as db:
+        user = db.scalar(
+            select(User).where(User.email.in_(["reader1@example.com", "reader1@local.kiosy.test"]))
+        )
+    result = build_graph(DeterministicProvider()).invoke(
+        {
+            "text": "Je veux souscrire.",
+            "user_id": user.id,
+            "trace_id": "subscribe-follow-up-test",
+            "limits": {
+                "max_delegations": 4,
+                "max_tool_calls": 12,
+                "max_llm_calls": 6,
+                "active_timeout_seconds": 120,
+            },
+            "history": [
+                "Utilisateur: Je cherche une publication culture.",
+                "Assistant: Voici des publications et leurs offres.",
+            ],
+            "specialist_results": [],
+            "mcp_invocations": [],
+            "delegations": 0,
+            "tool_call_count": 0,
+            "llm_call_count": 0,
+        }
+    )
+    assert result["action_requested"] is True
+    assert result["action_kind"] == "purchase"
+    assert result.get("pending_proposal_id")
+
+
 @pytest.mark.parametrize(
     ("limits", "expected_code"),
     [

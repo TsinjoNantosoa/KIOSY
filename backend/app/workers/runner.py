@@ -15,9 +15,10 @@ from langgraph.types import Command
 from pypdf import PdfReader
 from sqlalchemy import or_, select
 
+from app.ai.ingestion import catalog_passages, edition_passages, rebuild_all
 from app.ai.orchestration import build_graph
-from app.ai.providers import provider_from_settings
-from app.ai.retrieval import PassageInput, RetrievalIndex
+from app.ai.providers import embedding_provider_from_settings, provider_from_settings
+from app.ai.retrieval import RetrievalIndex
 from app.api.assistant import append_event
 from app.core.config import get_settings
 from app.core.security import utcnow
@@ -47,6 +48,34 @@ shutdown_requested = threading.Event()
 class ClaimedTask:
     id: str
     lease_owner: str
+
+
+def _conversation_context(db: Any, run: Run) -> list[str]:
+    rows = list(
+        db.scalars(
+            select(Message)
+            .where(
+                Message.conversation_id == run.conversation_id,
+                or_(Message.run_id.is_(None), Message.run_id != run.id),
+            )
+            .order_by(Message.created_at.desc())
+            .limit(settings.conversation_context_messages)
+        )
+    )
+    history: list[str] = []
+    for message in reversed(rows):
+        parts: list[str] = []
+        for block in message.blocks:
+            if block.get("type") == "text" and block.get("markdown"):
+                parts.append(str(block["markdown"])[:1200])
+            elif block.get("type") == "publications":
+                titles = [str(item.get("title", "")) for item in block.get("items", [])[:4]]
+                if titles:
+                    parts.append("Publications proposées : " + ", ".join(titles))
+        if parts:
+            label = "Utilisateur" if message.role == "user" else "KIA"
+            history.append(f"{label}: {' '.join(parts)}")
+    return history
 
 
 def claim_task() -> ClaimedTask | None:
@@ -170,8 +199,11 @@ def process_assistant(payload: dict[str, Any], graph: Any, claim: ClaimedTask) -
     if "resume" in payload:
         graph_input = Command(resume=payload["resume"])
     else:
+        with SessionLocal() as db:
+            history = _conversation_context(db, run)
         graph_input = {
             "text": payload["text"],
+            "history": history,
             "user_id": run.user_id,
             "trace_id": run.trace_id,
             "limits": run.limits or {},
@@ -260,8 +292,60 @@ def process_assistant(payload: dict[str, Any], graph: Any, claim: ClaimedTask) -
         blocks = [{"type": "text", "markdown": result["answer"]}]
         if result.get("publications"):
             blocks.append({"type": "publications", "items": result["publications"]})
+        candidates = result.get("candidates", [])
+        if candidates:
+            available_ids = {item["offer_id"] for item in result.get("filtered", candidates)}
+            recommended_id = next(iter(available_ids), None)
+            blocks.append(
+                {
+                    "type": "offer_comparison",
+                    "rows": [
+                        {
+                            "offer_id": item["offer_id"],
+                            "title": item["title"],
+                            "price": item["price"],
+                            "duration": item.get("duration"),
+                            "renewal": item.get("renewal", "none"),
+                            "includes": item.get("scope", {}).get("label")
+                            or item.get("universe", "Catalogue").title(),
+                            "note": (
+                                "Cette offre est déjà couverte par vos accès."
+                                if item["offer_id"] not in available_ids
+                                else None
+                            ),
+                            "status": (
+                                "redundant"
+                                if item["offer_id"] not in available_ids
+                                else "recommended"
+                                if item["offer_id"] == recommended_id
+                                else "neutral"
+                            ),
+                        }
+                        for item in candidates
+                    ],
+                }
+            )
         if result.get("citations"):
             blocks.append({"type": "citations", "items": result["citations"]})
+        if result.get("intent") == "support":
+            support_case = result.get("support_case")
+            needs_handoff = bool(support_case) or any(
+                action.get("type") == "create_support_case"
+                for specialist in result.get("specialist_results", [])
+                for action in specialist.get("proposed_actions", [])
+            )
+            if needs_handoff:
+                blocks.append(
+                    {
+                        "type": "handoff",
+                        "text": (
+                            "Votre demande d'assistance a été créée."
+                            if support_case
+                            else "Le diagnostic ne suffit pas à rétablir l'accès automatiquement."
+                        ),
+                        "case_id": support_case.get("id") if support_case else None,
+                    }
+                )
         message = Message(
             conversation_id=run.conversation_id,
             role="assistant",
@@ -317,27 +401,20 @@ def process_ingest(payload: dict[str, Any], claim: ClaimedTask) -> None:
             if text:
                 extracted.append(("document", text))
 
-        chunks: list[PassageInput] = []
-        for section, text in extracted:
-            for offset in range(0, len(text), 1800):
-                chunk = text[offset : offset + 2000].strip()
-                if chunk:
-                    chunks.append(
-                        PassageInput(
-                            document_id=edition.id,
-                            version=str(edition.version),
-                            publisher_id=publication.publisher_id,
-                            page_or_section=section,
-                            visibility="entitled",
-                            language=edition.language,
-                            effective_at=edition.published_at,
-                            ai_allowed=bool(edition.permissions.get("ai_indexing")),
-                            text=chunk,
-                        )
-                    )
-        provider = provider_from_settings(settings)
-        if chunks and edition.permissions.get("ai_indexing") and provider.status().configured:
-            RetrievalIndex(settings, provider).index(db, chunks)
+        chunks = edition_passages(settings, publication, edition, extracted)
+        embedding_provider = embedding_provider_from_settings(settings)
+        if (
+            chunks
+            and edition.permissions.get("ai_indexing")
+            and embedding_provider.status().embeddings_configured
+        ):
+            index = RetrievalIndex(settings, embedding_provider)
+            index.index(db, chunks)
+            index.index(
+                db,
+                [item for item in catalog_passages(db) if item.publication_id == publication.id],
+                force=True,
+            )
         elif edition.permissions.get("ai_indexing"):
             job.warnings = [*job.warnings, "AI_INDEX_SKIPPED: fournisseur d'embeddings non configuré."]
 
@@ -367,6 +444,11 @@ def process_one(claim: ClaimedTask, graph: Any) -> None:
         process_assistant(payload, graph, claim)
     elif kind == "ingest_asset":
         process_ingest(payload, claim)
+    elif kind == "rag_reindex":
+        with SessionLocal.begin() as db:
+            assert_lease(db, claim)
+            embedding_provider = embedding_provider_from_settings(settings)
+            rebuild_all(db, RetrievalIndex(settings, embedding_provider))
     elif kind == "send_password_reset":
         with SessionLocal() as db:
             assert_lease(db, claim)

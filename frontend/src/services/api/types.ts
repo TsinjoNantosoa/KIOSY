@@ -128,6 +128,7 @@ export interface KiosyApi {
     /** Suit les événements d'un run à partir de `afterSeq`. Retourne une fonction d'arrêt. */
     followRun(runId: string, afterSeq: number, handlers: RunEventHandlers): () => void;
     cancelRun(runId: string): Promise<AgentRun>;
+    sendFeedback(messageId: string, input: { rating: -1 | 1; reason?: string | null }): Promise<{ message_id: string; rating: -1 | 1; reason: string | null }>;
   };
   support: {
     list(opts?: RequestOptions): Promise<SupportCase[]>;

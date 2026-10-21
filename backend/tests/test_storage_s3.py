@@ -24,13 +24,13 @@ def csrf(client: TestClient) -> dict[str, str]:
     return {"X-CSRF-Token": response.json()["token"]}
 
 
-def register(client: TestClient) -> str:
+def register(client: TestClient, email: str | None = None) -> str:
     response = client.post(
         "/v1/auth/register",
         headers=csrf(client),
         json={
             "display_name": "S3 Reader",
-            "email": f"s3-{uuid.uuid4()}@example.com",
+            "email": email or f"s3-{uuid.uuid4()}@example.com",
             "password": "Correct-Horse-2026!",
             "accepted_terms_version": "mvp-2026-10-01",
         },
@@ -52,7 +52,8 @@ def test_private_asset_entitlement_presigned_expiry_refresh_and_revocation(
     )
     app.dependency_overrides[get_settings] = lambda: settings
     try:
-        user_id = register(client)
+        owner_email = f"s3-owner-{uuid.uuid4()}@example.com"
+        user_id = register(client, owner_email)
         suffix = uuid.uuid4().hex
         content = b"Kiosy private integration asset"
         object_key = f"integration/{suffix}.md"
@@ -113,6 +114,7 @@ def test_private_asset_entitlement_presigned_expiry_refresh_and_revocation(
             db.add(entitlement)
             db.flush()
             asset_id = asset.id
+            edition_id = edition.id
             entitlement_id = entitlement.id
 
         storage = S3Storage(settings)
@@ -132,6 +134,18 @@ def test_private_asset_entitlement_presigned_expiry_refresh_and_revocation(
         assert refreshed.json()["url"] != first_body["url"]
         assert httpx.get(refreshed.json()["url"], timeout=10).content == content
 
+        register(client)
+        other_user = client.get(f"/v1/assets/{asset_id}/access")
+        assert other_user.status_code == 403
+        assert other_user.json()["code"] == "ACCESS_DENIED"
+
+        login = client.post(
+            "/v1/auth/login",
+            headers=csrf(client),
+            json={"email": owner_email, "password": "Correct-Horse-2026!"},
+        )
+        assert login.status_code == 200
+
         with SessionLocal.begin() as db:
             entitlement = db.get(Entitlement, entitlement_id)
             assert entitlement is not None
@@ -140,5 +154,16 @@ def test_private_asset_entitlement_presigned_expiry_refresh_and_revocation(
         denied = client.get(f"/v1/assets/{asset_id}/access")
         assert denied.status_code == 403
         assert denied.json()["code"] == "ACCESS_DENIED"
+
+        with SessionLocal.begin() as db:
+            entitlement = db.get(Entitlement, entitlement_id)
+            edition = db.get(Edition, edition_id)
+            assert entitlement is not None and edition is not None
+            entitlement.status = "active"
+            edition.status = EditorialStatus.suspended
+
+        withdrawn = client.get(f"/v1/assets/{asset_id}/access")
+        assert withdrawn.status_code == 404
+        assert withdrawn.json()["code"] == "NOT_FOUND"
     finally:
         app.dependency_overrides.pop(get_settings, None)

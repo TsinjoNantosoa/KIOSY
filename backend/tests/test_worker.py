@@ -78,10 +78,9 @@ def test_abandoned_lease_is_reclaimed_and_multi_agent_run_completes(database_url
         assert run.status == "completed"
         assert len(run.checkpoint["specialist_results"]) == 3
         assert len(run.checkpoint.get("mcp_invocations", [])) >= 3
-        assert (
-            db.scalar(select(Message).where(Message.run_id == run_id, Message.role == "assistant"))
-            is not None
-        )
+        message = db.scalar(select(Message).where(Message.run_id == run_id, Message.role == "assistant"))
+        assert message is not None
+        assert "offer_comparison" in {block["type"] for block in message.blocks}
 
 
 def test_waiting_user_resumes_same_langgraph_thread(database_url: str) -> None:

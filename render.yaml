@@ -32,11 +32,17 @@ envVarGroups:
       - key: KIOSY_WORKER_HEARTBEAT_SECONDS
         value: "20"
       - key: KIOSY_EMBEDDING_NAMESPACE_VERSION
-        value: v1
+        value: v2
       - key: KIOSY_LLM_PROVIDER
-        value: azure
-      - key: KIOSY_ENABLE_LIVE_AZURE
+        value: openai
+      - key: KIOSY_EMBEDDING_PROVIDER
+        value: openai
+      - key: KIOSY_ENABLE_LIVE_OPENAI
         value: "true"
+      - key: KIOSY_OPENAI_CHAT_MODEL
+        value: gpt-6-astra
+      - key: KIOSY_OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
       - key: KIOSY_EMAIL_MODE
         value: smtp
       - key: KIOSY_SMTP_STARTTLS
@@ -85,15 +91,7 @@ services:
         sync: false
       - key: KIOSY_SMTP_FROM
         sync: false
-      - key: KIOSY_AZURE_OPENAI_API_KEY
-        sync: false
-      - key: KIOSY_AZURE_OPENAI_ENDPOINT
-        sync: false
-      - key: KIOSY_AZURE_OPENAI_DEPLOYMENT
-        sync: false
-      - key: KIOSY_AZURE_OPENAI_API_VERSION
-        value: 2025-01-01-preview
-      - key: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+      - key: KIOSY_OPENAI_API_KEY
         sync: false
 
   - type: worker
@@ -137,16 +135,8 @@ services:
         fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_SMTP_PASSWORD }
       - key: KIOSY_SMTP_FROM
         fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_SMTP_FROM }
-      - key: KIOSY_AZURE_OPENAI_API_KEY
-        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_API_KEY }
-      - key: KIOSY_AZURE_OPENAI_ENDPOINT
-        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_ENDPOINT }
-      - key: KIOSY_AZURE_OPENAI_DEPLOYMENT
-        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_DEPLOYMENT }
-      - key: KIOSY_AZURE_OPENAI_API_VERSION
-        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_API_VERSION }
-      - key: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT
-        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_AZURE_OPENAI_EMBEDDING_DEPLOYMENT }
+      - key: KIOSY_OPENAI_API_KEY
+        fromService: { name: kiosy-api, type: web, envVarKey: KIOSY_OPENAI_API_KEY }
 
 databases:
   - name: kiosy-postgres

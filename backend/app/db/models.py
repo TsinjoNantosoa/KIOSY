@@ -363,6 +363,20 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class MessageFeedback(Base, TimestampMixin):
+    __tablename__ = "message_feedback"
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_message_feedback_message_user"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    message_id: Mapped[str] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str | None] = mapped_column(String(500))
+
+
 class Run(Base, TimestampMixin):
     __tablename__ = "runs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -462,9 +476,21 @@ class ImportJob(Base, TimestampMixin):
 
 class RagPassage(Base, TimestampMixin):
     __tablename__ = "rag_passages"
-    __table_args__ = (UniqueConstraint("document_id", "version", "chunk_index", "embedding_space"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "source_type",
+            "document_id",
+            "version",
+            "chunk_index",
+            "embedding_space",
+            name="uq_rag_passages_source_document_version_chunk_space",
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    source_type: Mapped[str] = mapped_column(String(30), default="edition_content", index=True)
     document_id: Mapped[str] = mapped_column(String(36), index=True)
+    publication_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    edition_id: Mapped[str | None] = mapped_column(String(36), index=True)
     version: Mapped[str] = mapped_column(String(80))
     publisher_id: Mapped[str | None] = mapped_column(String(36), index=True)
     page_or_section: Mapped[str] = mapped_column(String(120))
@@ -475,6 +501,8 @@ class RagPassage(Base, TimestampMixin):
     ai_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
     chunk_index: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
+    token_count: Mapped[int] = mapped_column(Integer, default=0)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
     embedding_space: Mapped[str] = mapped_column(String(160))
     vector_id: Mapped[str | None] = mapped_column(String(100))
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)

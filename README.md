@@ -17,6 +17,7 @@ python -m venv .venv
 $env:KIOSY_SEED_PASSWORD = Read-Host -AsSecureString | ConvertFrom-SecureString -AsPlainText
 .venv\Scripts\python -m app.scripts.seed
 .venv\Scripts\python -m app.scripts.setup_checkpointer
+.venv\Scripts\python -m app.scripts.reindex_rag
 ```
 
 Dans deux terminaux `backend` :
@@ -70,5 +71,7 @@ Le seed refuse les environnements staging/production et exige `KIOSY_SEED_PASSWO
 - [Multi-agent KIA](docs/MULTI_AGENT.md)
 - [Rapport de tests](docs/TEST_REPORT.md)
 - [Azure OpenAI](docs/AZURE.md)
+- [OpenAI et recherche hybride](docs/OPENAI.md)
+- [GraphMind (développement uniquement)](docs/GRAPHMIND.md)
 - [Exploitation](docs/OPERATIONS.md)
 - [Vérification et limites](docs/VERIFICATION.md)

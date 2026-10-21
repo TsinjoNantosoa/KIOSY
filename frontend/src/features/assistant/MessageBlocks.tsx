@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
-import { AlertTriangle, FileText, LifeBuoy, LogIn, Quote } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, FileText, LifeBuoy, LogIn, Quote, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { Citation, Message, MessageBlock, OfferComparisonRow } from "@/contracts/models";
 import { Cover } from "@/components/Cover";
 import { SafeMarkdown } from "@/components/SafeMarkdown";
@@ -11,6 +12,7 @@ import { classifyLink } from "@/lib/safeUrl";
 import { t } from "@/locales";
 import { useTimeZone } from "@/features/auth/session";
 import { ProposalCard } from "@/features/proposals/ProposalCard";
+import { api } from "@/services/api";
 
 /** Nature d'une réponse (UX03) : information, action préparée, échec. */
 export function messageKind(message: Message): "information" | "prepared" | "failed" {
@@ -25,6 +27,39 @@ export function MessageBlocks({ message, onQuickReply }: { message: Message; onQ
       {message.blocks.map((block, i) => (
         <Block key={i} block={block} onQuickReply={onQuickReply} />
       ))}
+      <AnswerFeedback messageId={message.id} />
+    </div>
+  );
+}
+
+function AnswerFeedback({ messageId }: { messageId: string }) {
+  const [rating, setRating] = useState<-1 | 1 | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const send = async (next: -1 | 1) => {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      await api.assistant.sendFeedback(messageId, { rating: next });
+      setRating(next);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex items-center gap-1 border-t border-line/70 pt-2 text-xs text-ink-subtle" aria-live="polite">
+      <span>Cette réponse vous aide ?</span>
+      <button type="button" onClick={() => void send(1)} disabled={busy} aria-label="Réponse utile" aria-pressed={rating === 1} className={`rounded p-1 hover:bg-brand-soft hover:text-brand ${rating === 1 ? "bg-brand-soft text-brand" : ""}`}>
+        <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
+      </button>
+      <button type="button" onClick={() => void send(-1)} disabled={busy} aria-label="Réponse à améliorer" aria-pressed={rating === -1} className={`rounded p-1 hover:bg-danger-soft hover:text-danger ${rating === -1 ? "bg-danger-soft text-danger" : ""}`}>
+        <ThumbsDown className="h-3.5 w-3.5" aria-hidden />
+      </button>
+      {rating && <span>Merci pour votre avis.</span>}
+      {failed && <span className="text-danger">Avis non enregistré.</span>}
     </div>
   );
 }
