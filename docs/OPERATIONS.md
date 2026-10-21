@@ -6,9 +6,13 @@
 
 Qdrant et le stockage S3 sont des services persistants externes à fournir à Render; le blueprint ne crée volontairement aucun service payant. Le simulateur de paiement reste désactivé en production.
 
+Après un changement de fournisseur/modèle d'embeddings ou de version de namespace, exécuter `python -m app.scripts.reindex_rag`, puis contrôler `/v1/admin/rag/health`. Ne jamais mélanger des vecteurs de dimensions ou modèles différents dans une même collection logique.
+
 ## Santé, tâches et arrêt
 
 `/health/live` vérifie le processus; `/health/ready` vérifie PostgreSQL sans exposer de détail. Surveiller les tâches au bail dépassé, les retries, les statuts `failed` et les outbox non publiées. Le worker renouvelle son bail, refuse les écritures d’un propriétaire obsolète et termine la tâche active avant l’arrêt gracieux lorsque le délai plateforme le permet.
+
+Surveiller aussi les divergences de comptage DB/Qdrant, les passages retirés, les erreurs fournisseur LLM, le nombre de tool calls, les budgets et les feedbacks KIA. Une réponse RAG ne doit jamais contourner la revalidation ACL en base.
 
 ## Sauvegarde et restauration
 

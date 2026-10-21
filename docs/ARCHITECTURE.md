@@ -1,5 +1,11 @@
 # Architecture et décisions
 
+## État production-readiness (21 octobre 2026)
+
+KIA sépare coordination LangGraph, spécialistes et outils MCP. PostgreSQL reste la vérité durable pour comptes, droits, propositions, commandes, runs et tâches. Le RAG combine recherche lexicale et Qdrant, puis revalide chaque passage contre les ACL PostgreSQL avant exposition. La génération et les embeddings peuvent utiliser des fournisseurs distincts (OpenAI/Azure) et leur namespace inclut fournisseur, modèle, dimensions et version.
+
+Le worker sérialise les résultats structurés en blocs frontend (`publications`, `offer_comparison`, `citations`, `proposal`, `handoff`). Les actions sensibles suivent toujours `Proposal -> waiting_approval -> revalidation -> execution`; le LLM ne crée ni paiement ni droit directement.
+
 ## ADR-001 — Monolithe modulaire
 
 L'API, les services métier, l'orchestration et les trois serveurs MCP partagent un déploiement et une base de code. Le worker est un processus séparé. Cette organisation garde une seule définition des règles métier tout en permettant de dimensionner API et worker séparément.

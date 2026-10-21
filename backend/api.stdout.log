@@ -70,3 +70,16 @@ INFO:     127.0.0.1:63757 - "GET /v1/runs/f85b492d-755f-40d9-bdde-8873c9e74926/e
 INFO:     127.0.0.1:63757 - "GET /v1/runs/f85b492d-755f-40d9-bdde-8873c9e74926/events?after_seq=1 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:55640 - "GET /v1/conversations/b26e7da4-620f-40ee-9e1a-a7c1dd13587d HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54287 - "GET /v1/conversations/b26e7da4-620f-40ee-9e1a-a7c1dd13587d/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58933 - "GET /v1/auth/session HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57196 - "OPTIONS /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "POST /v1/conversations HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:62463 - "GET /v1/conversations/b26e7da4-620f-40ee-9e1a-a7c1dd13587d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60310 - "GET /v1/conversations/b26e7da4-620f-40ee-9e1a-a7c1dd13587d/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53066 - "GET /v1/conversations/b26e7da4-620f-40ee-9e1a-a7c1dd13587d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61785 - "GET /v1/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60310 - "GET /v1/conversations/b26e7da4-620f-40ee-9e1a-a7c1dd13587d/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53066 - "GET /v1/conversations/da90bbc9-83b1-4f4f-9db1-8544c91caea7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56746 - "GET /v1/conversations/da90bbc9-83b1-4f4f-9db1-8544c91caea7/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60450 - "GET /v1/conversations/ce699b6f-e638-4162-a279-1daaae199f9b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58060 - "GET /v1/conversations/ce699b6f-e638-4162-a279-1daaae199f9b/messages HTTP/1.1" 200 OK

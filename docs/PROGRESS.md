@@ -1,5 +1,20 @@
 # Progression MVP P0 — Kiosy
 
+## Phase 17 — Production Readiness + GraphMind — 21 octobre 2026
+
+Statut : **implémentée et validée localement**, hors services externes explicitement bloqués.
+
+- GraphMind 0.3.7 installé, index final de 1 090 symboles, MCP Codex et hooks actifs ;
+- OpenAI Responses + embeddings et Azure Chat vérifiés en live sans journaliser de secrets ;
+- RAG hybride réindexé (56 passages), santé DB/Qdrant et ACL multi-utilisateur validées ;
+- recherche catalogue avec repli autorisé, comparaison structurée, citations et handoff support raccordés au frontend ;
+- « Je veux souscrire » et apostrophes typographiques reconnus ;
+- retour du paiement de test corrigé vers la route frontend réelle ;
+- contrôle éditorial ajouté aux accès S3 ;
+- E2E API réel ajouté à la CI avec backend et worker ;
+- 49 Pytest, 52 Vitest, 22 Playwright démo et 3 Playwright API passent ;
+- dettes suivies : MyPy strict (168) et audit npm (11), staging et Azure embeddings bloqués extérieurement.
+
 Dernière mise à jour : 12 octobre 2026. Source métier : `Cahier_des_charges_Kiosy_v1.pdf`, versionné dans le dépôt (SHA-256 vérifié : `DF894BEAF66463B3015962DD1B72EFA5819CE6044021118C5213FD16B3B9DBB9`).
 
 | Exigence | Module | Implémentation | Test | État |

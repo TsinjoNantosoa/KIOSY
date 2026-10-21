@@ -38,7 +38,7 @@ Codes métier courants : `ACCESS_DENIED`, `NOT_FOUND`, `APPROVAL_REQUIRED`, `ALR
 | Outil | Scope | Mutation |
 |-------|-------|----------|
 | `search_terms` / `search_conditions` | `documents:read` | non |
-| `get_authorized_excerpt` | `documents:read` | non (RAG + ACL) |
+| `search_authorized_content` / `get_authorized_excerpt` | `documents:read` | non (RAG hybride + ACL) |
 | `diagnose_access` | `access:diagnose` | non |
 | `create_support_case` | `support:write` | oui |
 | `get_my_case` | `support:read` | non |
