@@ -54,13 +54,18 @@ const imports: ImportJob[] = [{
   updated_at: "2026-10-27T00:00:00Z",
 }];
 
+const mocks = vi.hoisted(() => ({ editions: vi.fn(), imports: vi.fn(), analytics: vi.fn() }));
+
 vi.mock("@/features/auth/session", () => ({ useUid: () => "publisher-user" }));
 vi.mock("@/services/api", () => ({
-  api: { admin: { editions: vi.fn().mockResolvedValue(rows), imports: vi.fn().mockResolvedValue(imports), publisherAnalytics: vi.fn().mockResolvedValue({ publications: 1, editions: 1, orders: 0, entitlements: 0 }) } },
+  api: { admin: { editions: mocks.editions, imports: mocks.imports, publisherAnalytics: mocks.analytics } },
 }));
 
 describe("PublisherDashboard", () => {
   it("affiche uniquement les métriques réellement dérivées des contenus éditeur", async () => {
+    mocks.editions.mockResolvedValue(rows);
+    mocks.imports.mockResolvedValue(imports);
+    mocks.analytics.mockResolvedValue({ publications: 1, editions: 1, orders: 0, entitlements: 0 });
     renderWithProviders(<PublisherDashboard />);
     expect(await screen.findByText("Tableau de bord éditeur")).toBeInTheDocument();
     expect(screen.getByText("Corrections demandées")).toBeInTheDocument();
