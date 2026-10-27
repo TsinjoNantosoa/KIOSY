@@ -242,6 +242,16 @@ export function seedDemoDb(): DemoDb {
       is_demo: true,
       demo_password: "demo",
     },
+    {
+      id: "u_publisher",
+      email: "editeur@demo.kiosy.invalid",
+      display_name: "Soa — éditrice (fictif)",
+      roles: ["publisher"],
+      publisher_id: publishers[0]!.id,
+      preferences: { time_zone: "Indian/Antananarivo", language: "fr" },
+      is_demo: true,
+      demo_password: "demo",
+    },
   ];
 
   const offerById = (id: string) => offers.find((o) => o.id === id)!;

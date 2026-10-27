@@ -781,31 +781,34 @@ export function createDemoApi(): KiosyApi {
         }, opts?.signal),
       publishers: (opts) =>
         handle((db) => {
-          requireRole(db, ["admin"]);
-          return db.publishers;
+          const user = requireRole(db, ["admin", "publisher"]);
+          return user.roles.includes("admin") ? db.publishers : db.publishers.filter((p) => p.id === user.publisher_id);
         }, opts?.signal),
       editions: (filter, opts) =>
         handle((db) => {
-          requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           const q = normalize(filter.q ?? "");
           return db.editions
             .filter((e) => !filter.status || e.status === filter.status)
             .map((edition) => ({ edition, publication: publicationOf(db, edition) }))
-            .filter((row) => !q || normalize(`${row.publication.title} ${row.edition.label}`).includes(q))
+            .filter((row) => (user.roles.includes("admin") || row.publication.publisher.id === user.publisher_id) && (!q || normalize(`${row.publication.title} ${row.edition.label}`).includes(q)))
             .sort((a, b) => Date.parse(b.edition.published_at) - Date.parse(a.edition.published_at));
         }, opts?.signal),
       edition: (id, opts) =>
         handle((db) => {
-          requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           const edition = db.editions.find((e) => e.id === id);
           if (!edition) fail(404, "NOT_FOUND", "Édition introuvable.");
-          return { edition, publication: publicationOf(db, edition) };
+          const publication = publicationOf(db, edition);
+          if (!user.roles.includes("admin") && publication.publisher.id !== user.publisher_id) fail(404, "NOT_FOUND", "Édition introuvable.");
+          return { edition, publication };
         }, opts?.signal),
       createPublication: (input) =>
         handle((db): AdminEditionRow => {
-          const user = requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           const publisher = db.publishers.find((p) => p.id === input.publisher_id);
           if (!publisher) fail(422, "VALIDATION_ERROR", "Éditeur inconnu.", [{ field: "publisher_id", issue: "Éditeur inconnu." }]);
+          if (!user.roles.includes("admin") && publisher.id !== user.publisher_id) fail(404, "NOT_FOUND", "Éditeur introuvable.");
           const id = nextId("p");
           const slugBase = normalize(input.title).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
           const publication: Publication = {
@@ -845,9 +848,10 @@ export function createDemoApi(): KiosyApi {
         }),
       createEdition: (publicationId, input) =>
         handle((db): AdminEditionRow => {
-          const user = requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           const publication = db.publications.find((p) => p.id === publicationId);
           if (!publication) fail(404, "NOT_FOUND", "Publication introuvable.");
+          if (!user.roles.includes("admin") && publication.publisher.id !== user.publisher_id) fail(404, "NOT_FOUND", "Publication introuvable.");
           const edition: Edition = {
             id: nextId("e"), publication_id: publication.id, label: input.label.trim(), published_at: input.published_at,
             format: input.format, language: publication.language, page_count: null, word_count: null, status: "draft",
@@ -860,9 +864,10 @@ export function createDemoApi(): KiosyApi {
         }),
       updatePublication: (id, input) =>
         handle((db) => {
-          const user = requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           const publication = db.publications.find((p) => p.id === id);
           if (!publication) fail(404, "NOT_FOUND", "Publication introuvable.");
+          if (!user.roles.includes("admin") && publication.publisher.id !== user.publisher_id) fail(404, "NOT_FOUND", "Publication introuvable.");
           const publisher = db.publishers.find((p) => p.id === input.publisher_id);
           if (!publisher) fail(422, "VALIDATION_ERROR", "Éditeur inconnu.");
           Object.assign(publication, { title: input.title.trim(), author: input.author.trim(), universe: input.universe, language: input.language, summary: input.summary.trim(), tags: input.tags, publisher });
@@ -871,25 +876,30 @@ export function createDemoApi(): KiosyApi {
         }),
       updateEdition: (id, input) =>
         handle((db) => {
-          const user = requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           const edition = db.editions.find((e) => e.id === id);
           if (!edition) fail(404, "NOT_FOUND", "Édition introuvable.");
+          const publication = publicationOf(db, edition);
+          if (!user.roles.includes("admin") && publication.publisher.id !== user.publisher_id) fail(404, "NOT_FOUND", "Édition introuvable.");
           if (edition.version !== input.version) fail(409, "VERSION_CONFLICT", "Cette édition a été modifiée entre-temps. Rechargez-la avant d'enregistrer.");
           Object.assign(edition, { label: input.label.trim(), format: input.format, published_at: input.published_at, permissions: input.permissions, is_free: input.is_free, version: edition.version + 1 });
           db.audit.unshift(auditEvent(clock.iso(), actorOf(user), "edition.update", { type: "edition", id, label: edition.label }, null, "success"));
-          return { edition, publication: publicationOf(db, edition) };
+          return { edition, publication };
         }),
       transitionEdition: (id, input) =>
         handle((db) => {
-          const user = requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           const edition = db.editions.find((e) => e.id === id);
           if (!edition) fail(404, "NOT_FOUND", "Édition introuvable.");
+          const publication = publicationOf(db, edition);
+          if (!user.roles.includes("admin") && publication.publisher.id !== user.publisher_id) fail(404, "NOT_FOUND", "Édition introuvable.");
+          if (!user.roles.includes("admin") && input.to !== "review") fail(409, "INVALID_TRANSITION", "Seule l'administration peut prendre cette décision.");
           if (edition.version !== input.version) fail(409, "VERSION_CONFLICT", "Cette édition a été modifiée entre-temps. Rechargez-la.");
           if (!EDITORIAL_TRANSITIONS[edition.status].includes(input.to)) {
             db.audit.unshift(auditEvent(clock.iso(), actorOf(user), `edition.${input.to}`, { type: "edition", id, label: edition.label }, `Transition refusée ${edition.status} → ${input.to}.`, "denied"));
             fail(409, "INVALID_TRANSITION", `Transition non autorisée : ${edition.status} → ${input.to}.`);
           }
-          if (input.to === "published" && !edition.asset_id) fail(409, "ASSET_NOT_READY", "Aucun fichier traité avec succès pour cette édition : importez-le avant de publier.");
+          if ((input.to === "review" || input.to === "published") && !edition.asset_id) fail(409, "ASSET_NOT_READY", "Aucun fichier traité avec succès pour cette édition : importez-le avant de continuer.");
           if ((input.to === "suspended" || input.to === "archived") && input.reason.trim().length < 5) fail(422, "VALIDATION_ERROR", "Un motif est requis pour un retrait.");
           edition.status = input.to;
           edition.version += 1;
@@ -900,7 +910,7 @@ export function createDemoApi(): KiosyApi {
             }
           }
           db.audit.unshift(auditEvent(clock.iso(), actorOf(user), `edition.${input.to}`, { type: "edition", id, label: edition.label }, input.reason || null, "success"));
-          return { edition, publication: publicationOf(db, edition) };
+          return { edition, publication };
         }),
       offers: (opts) =>
         handle((db) => {
@@ -953,16 +963,51 @@ export function createDemoApi(): KiosyApi {
         }),
       imports: (opts) =>
         handle((db) => {
-          requireRole(db, ["admin"]);
-          return db.imports.map(({ schedule: _s, final_error: _f, ...job }) => job).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+          const user = requireRole(db, ["admin", "publisher"]);
+          return db.imports
+            .filter((job) => user.roles.includes("admin") || publicationOf(db, db.editions.find((e) => e.id === job.edition_id)!).publisher.id === user.publisher_id)
+            .map(({ schedule: _s, final_error: _f, ...job }) => job)
+            .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+        }, opts?.signal),
+      publisherReviews: (opts) =>
+        handle((db) => {
+          const user = requireRole(db, ["publisher"]);
+          return db.editions
+            .filter((edition) => edition.status === "changes_requested")
+            .map((edition) => ({ edition, publication: publicationOf(db, edition) }))
+            .filter(({ publication }) => publication.publisher.id === user.publisher_id)
+            .map(({ edition, publication }) => ({
+              id: `review-${edition.id}`,
+              edition_id: edition.id,
+              edition_label: edition.label,
+              publication_title: publication.title,
+              decision: "changes_requested" as const,
+              comment: "Des modifications ont été demandées avant publication.",
+              created_at: edition.published_at,
+            }));
+        }, opts?.signal),
+      publisherAnalytics: (opts) =>
+        handle((db) => {
+          const user = requireRole(db, ["publisher"]);
+          const publications = db.publications.filter((publication) => publication.publisher.id === user.publisher_id);
+          const publicationIds = new Set(publications.map((publication) => publication.id));
+          const editions = db.editions.filter((edition) => publicationIds.has(edition.publication_id));
+          const editionIds = new Set(editions.map((edition) => edition.id));
+          return {
+            publications: publications.length,
+            editions: editions.length,
+            orders: db.orders.filter((order) => order.edition_id && editionIds.has(order.edition_id)).length,
+            entitlements: db.entitlements.filter((right) => right.scope.kind === "edition" && editionIds.has(right.scope.edition_id)).length,
+          };
         }, opts?.signal),
       uploadImport: async (input, opts) => {
         const head = await input.file.slice(0, 5).text().catch(() => "");
         return handle((db) => {
-          const user = requireRole(db, ["admin"]);
+          const user = requireRole(db, ["admin", "publisher"]);
           return withIdempotency(db, user.id, "import", opts.idempotencyKey, { name: input.file.name, size: input.file.size, edition: input.edition_id }, () => {
             const edition = db.editions.find((e) => e.id === input.edition_id);
             if (!edition) fail(422, "VALIDATION_ERROR", "Édition inconnue.", [{ field: "edition_id", issue: "Édition inconnue." }]);
+            if (!user.roles.includes("admin") && publicationOf(db, edition).publisher.id !== user.publisher_id) fail(404, "NOT_FOUND", "Édition introuvable.");
             const name = input.file.name.toLowerCase();
             if (input.file.size > appConfig.upload.maxBytes) fail(422, "VALIDATION_ERROR", "Fichier trop volumineux.");
             if (!appConfig.upload.acceptedExtensions.some((ext) => name.endsWith(ext))) fail(422, "VALIDATION_ERROR", "Extension non autorisée.");

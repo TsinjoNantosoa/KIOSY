@@ -127,6 +127,9 @@ function AccountActions({ onNavigate, stacked = false }: { onNavigate?: () => vo
           {t.nav.admin}
         </ButtonLink>
       )}
+      {hasAnyRole(user, ["publisher"]) && (
+        <ButtonLink to="/publisher" variant="ghost" onClick={onNavigate}>Espace éditeur</ButtonLink>
+      )}
       <ButtonLink to="/compte" variant="outline" onClick={onNavigate} icon={<User className="h-4 w-4" aria-hidden />}>
         <span className="max-w-[10rem] truncate">{t.nav.account}</span>
       </ButtonLink>
@@ -321,7 +324,8 @@ export function AccountLayout() {
 
 const adminLinks: { to: string; label: string; icon: typeof Home; end?: boolean; roles: Role[] }[] = [
   { to: "/admin", label: "Tableau de bord", icon: BarChart3, end: true, roles: ["admin", "manager", "support"] },
-  { to: "/admin/catalogue", label: "Catalogue", icon: BookOpen, roles: ["admin"] },
+  { to: "/admin/catalogue", label: "Catalogue", icon: BookOpen, roles: ["admin", "manager"] },
+  { to: "/admin/revues", label: "Revue éditoriale", icon: ClipboardCheck, roles: ["admin", "manager"] },
   { to: "/admin/offres", label: "Offres", icon: Tags, roles: ["admin"] },
   { to: "/admin/imports", label: "Imports", icon: FileUp, roles: ["admin"] },
   { to: "/admin/commerce", label: "Commandes et abonnements", icon: CreditCard, roles: ["admin", "manager", "support"] },
@@ -360,6 +364,41 @@ export function AdminLayout() {
         <main id="contenu" tabIndex={-1} className="min-w-0 outline-none">
           <Outlet />
         </main>
+      </div>
+      <SessionExpiryListener />
+      <RouteFocus />
+    </div>
+  );
+}
+
+const publisherLinks = [
+  { to: "/publisher", label: "Tableau de bord", icon: BarChart3, end: true },
+  { to: "/publisher/publications", label: "Publications", icon: BookOpen },
+  { to: "/publisher/imports", label: "Imports", icon: FileUp },
+  { to: "/publisher/reviews", label: "Demandes de correction", icon: ClipboardCheck },
+];
+
+export function PublisherLayout() {
+  const { user } = useSession();
+  return (
+    <div className="flex min-h-dvh flex-col bg-paper">
+      <SkipLink />
+      <DemoBarSlot />
+      <header className="border-b border-line bg-surface">
+        <div className="container flex h-14 items-center gap-3">
+          <Logo to="/publisher" />
+          <span className="hidden rounded bg-brand px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white sm:inline">Espace éditeur</span>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="hidden text-sm text-ink-muted sm:inline">{user?.display_name}</span>
+            <ButtonLink to="/" variant="ghost" size="sm">Site public</ButtonLink>
+          </div>
+        </div>
+      </header>
+      <div className="container grid flex-1 grid-cols-[minmax(0,1fr)] gap-6 py-6 md:grid-cols-[15rem_minmax(0,1fr)] md:gap-8">
+        <aside className="min-w-0 md:sticky md:top-6 md:self-start">
+          <SideNav label="Navigation éditeur" links={publisherLinks} />
+        </aside>
+        <main id="contenu" tabIndex={-1} className="min-w-0 outline-none"><Outlet /></main>
       </div>
       <SessionExpiryListener />
       <RouteFocus />

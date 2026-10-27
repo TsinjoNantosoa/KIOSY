@@ -16,7 +16,8 @@ import { useAdminKey, useAdminQuery } from "./shared";
 const schema = publicationSchema.merge(editionSchema);
 type Values = typeof schema._type;
 
-export default function AdminNewPublication() {
+export default function AdminNewPublication({ workspace = "admin" }: { workspace?: "admin" | "publisher" }) {
+  const base = workspace === "publisher" ? "/publisher/publications" : "/admin/catalogue";
   useDocumentTitle(`Nouvelle publication · ${brand.name}`);
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -40,13 +41,13 @@ export default function AdminNewPublication() {
       }),
     onSuccess: (row) => {
       client.invalidateQueries({ queryKey: adminKey("editions") });
-      navigate(`/admin/catalogue/${row.edition.id}`, { replace: true });
+      navigate(`${base}/${row.edition.id}`, { replace: true });
     },
   });
   const e = form.formState.errors;
   return (
     <div>
-      <PageHeader title="Nouvelle publication" back={{ to: "/admin/catalogue", label: "Catalogue" }} />
+      <PageHeader title="Nouvelle publication" back={{ to: base, label: "Catalogue" }} />
       <Alert tone="info" className="mb-6">La publication est créée en brouillon. Importez ensuite son fichier, puis faites-la passer en revue avant publication.</Alert>
       <form onSubmit={form.handleSubmit((v) => create.mutate(v))} noValidate className="space-y-6">
         <Card>
@@ -88,7 +89,7 @@ export default function AdminNewPublication() {
         </Card>
         {create.error && <InlineError error={create.error} />}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <ButtonLink to="/admin/catalogue" variant="outline">Annuler</ButtonLink>
+          <ButtonLink to={base} variant="outline">Annuler</ButtonLink>
           <Button type="submit" loading={create.isPending}>Créer en brouillon</Button>
         </div>
       </form>

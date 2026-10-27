@@ -73,6 +73,8 @@ export const fr = {
   editorialStatus: {
     draft: "Brouillon",
     review: "À revoir",
+    changes_requested: "Corrections demandées",
+    approved: "Approuvée",
     published: "Publié",
     suspended: "Suspendu",
     archived: "Archivé",

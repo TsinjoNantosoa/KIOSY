@@ -7,7 +7,7 @@ import { STAFF_ROLES } from "@/features/auth/session";
 import { NotFoundPage } from "@/features/public/StatusPages";
 import { HomePage } from "@/features/public/HomePage";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { AccountLayout, AdminLayout, BareLayout, PublicLayout } from "./layouts";
+import { AccountLayout, AdminLayout, BareLayout, PublicLayout, PublisherLayout } from "./layouts";
 
 // Routes secondaires chargées à la demande.
 const CatalogPage = lazy(() => import("@/features/catalog/CatalogPage"));
@@ -53,6 +53,10 @@ const AdminApprovals = lazy(() => import("@/features/administration/AdminApprova
 const AdminAudit = lazy(() => import("@/features/administration/AdminAudit"));
 const AdminRuns = lazy(() => import("@/features/administration/AdminRuns"));
 const AdminRunPage = lazy(() => import("@/features/administration/AdminRunPage"));
+const AdminEditorialReviews = lazy(() => import("@/features/administration/AdminEditorialReviews"));
+const PublisherDashboard = lazy(() => import("@/features/publisher/PublisherDashboard"));
+const PublisherReviews = lazy(() => import("@/features/publisher/PublisherReviews"));
+const PublisherNewEdition = lazy(() => import("@/features/publisher/PublisherNewEdition"));
 
 function Page({ children }: { children: ReactNode }) {
   return (
@@ -119,12 +123,24 @@ export function AppRoutes() {
         {isDemo && TestProviderPage && <Route path="paiement-test/:sessionId" element={auth(<TestProviderPage />)} />}
       </Route>
 
+      <Route path="publisher" element={<RequireRole roles={["publisher"]}><PublisherLayout /></RequireRole>}>
+        <Route index element={<Page><PublisherDashboard /></Page>} />
+        <Route path="publications" element={<Page><AdminCatalog workspace="publisher" /></Page>} />
+        <Route path="publications/nouveau" element={<Page><AdminNewPublication workspace="publisher" /></Page>} />
+        <Route path="publications/nouvelle-edition" element={<Page><PublisherNewEdition /></Page>} />
+        <Route path="publications/:editionId" element={<Page><AdminEditionPage workspace="publisher" /></Page>} />
+        <Route path="imports" element={<Page><AdminImports /></Page>} />
+        <Route path="reviews" element={<Page><PublisherReviews /></Page>} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+
       <Route path="admin" element={<RequireRole roles={STAFF_ROLES}><AdminLayout /></RequireRole>}>
         <Route index element={<Page><AdminDashboard /></Page>} />
-        <Route path="catalogue" element={adminOnly(<Page><AdminCatalog /></Page>)} />
+        <Route path="catalogue" element={<RequireRole roles={["admin", "manager"]}><Page><AdminCatalog /></Page></RequireRole>} />
         <Route path="catalogue/nouveau" element={adminOnly(<Page><AdminNewPublication /></Page>)} />
         <Route path="catalogue/nouvelle-edition" element={adminOnly(<Page><AdminNewEdition /></Page>)} />
-        <Route path="catalogue/:editionId" element={adminOnly(<Page><AdminEditionPage /></Page>)} />
+        <Route path="catalogue/:editionId" element={<RequireRole roles={["admin", "manager"]}><Page><AdminEditionPage /></Page></RequireRole>} />
+        <Route path="revues" element={<RequireRole roles={["admin", "manager"]}><Page><AdminEditorialReviews /></Page></RequireRole>} />
         <Route path="offres" element={adminOnly(<Page><AdminOffers /></Page>)} />
         <Route path="offres/nouvelle" element={adminOnly(<Page><AdminNewOffer /></Page>)} />
         <Route path="offres/:offerId" element={adminOnly(<Page><AdminOfferPage /></Page>)} />

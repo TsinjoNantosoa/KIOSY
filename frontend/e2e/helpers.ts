@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export async function loginAs(page: Page, who: "hery" | "fara" | "support" | "responsable" | "admin", returnTo = "/compte") {
+export async function loginAs(page: Page, who: "hery" | "fara" | "support" | "responsable" | "admin" | "editeur", returnTo = "/compte") {
   // Repart d'une session vierge (changement de persona dans un même test).
   await page.goto("/aide");
   await page.evaluate(() => sessionStorage.removeItem("kiosy-demo-session"));

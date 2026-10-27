@@ -23,21 +23,24 @@ import { useAdminKey, useAdminQuery } from "./shared";
 const TRANSITION_LABEL: Record<EditorialStatus, string> = {
   draft: "Renvoyer en brouillon",
   review: "Soumettre à revue",
+  changes_requested: "Demander des corrections",
+  approved: "Approuver",
   published: "Publier",
   suspended: "Suspendre (retrait)",
   archived: "Archiver",
 };
 
-export default function AdminEditionPage() {
+export default function AdminEditionPage({ workspace = "admin" }: { workspace?: "admin" | "publisher" }) {
   const { editionId = "" } = useParams();
   const row = useAdminQuery(["edition", editionId], ({ signal }) => api.admin.edition(editionId, { signal }));
   useDocumentTitle(`${row.data?.publication.title ?? "Édition"} · Administration · ${brand.name}`);
   if (row.isPending) return <LoadingBlock lines={8} />;
   if (row.isError) return <ErrorState error={row.error} onRetry={() => row.refetch()} />;
-  return <EditionEditor key={`${row.data.edition.id}-${row.data.edition.version}`} row={row.data} onReload={() => row.refetch()} />;
+  return <EditionEditor key={`${row.data.edition.id}-${row.data.edition.version}`} row={row.data} onReload={() => row.refetch()} workspace={workspace} />;
 }
 
-function EditionEditor({ row, onReload }: { row: AdminEditionRow; onReload: () => void }) {
+function EditionEditor({ row, onReload, workspace }: { row: AdminEditionRow; onReload: () => void; workspace: "admin" | "publisher" }) {
+  const base = workspace === "publisher" ? "/publisher/publications" : "/admin/catalogue";
   const { edition, publication } = row;
   const client = useQueryClient();
   const adminKey = useAdminKey();
@@ -88,13 +91,13 @@ function EditionEditor({ row, onReload }: { row: AdminEditionRow; onReload: () =
     },
   });
   const conflict = [saveEd.error, move.error].some((e) => isApiError(e) && e.code === "VERSION_CONFLICT");
-  const needsReason = transition === "suspended" || transition === "archived";
+  const needsReason = transition === "changes_requested" || transition === "suspended" || transition === "archived";
   const e1 = pubForm.formState.errors;
   const e2 = edForm.formState.errors;
 
   return (
     <div className="space-y-6">
-      <PageHeader title={publication.title} eyebrow={`Édition ${edition.label} · version ${edition.version}`} back={{ to: "/admin/catalogue", label: "Catalogue" }} actions={<div className="flex items-center gap-2"><ButtonLink to={`/admin/catalogue/nouvelle-edition?publication=${publication.id}`} variant="outline">Ajouter une édition</ButtonLink><EditorialStatusBadge status={edition.status} /></div>} />
+      <PageHeader title={publication.title} eyebrow={`Édition ${edition.label} · version ${edition.version}`} back={{ to: base, label: "Publications" }} actions={<div className="flex items-center gap-2"><ButtonLink to={`${base}/nouvelle-edition?publication=${publication.id}`} variant="outline">Ajouter une édition</ButtonLink><EditorialStatusBadge status={edition.status} /></div>} />
       {conflict && (
         <Alert tone="warning" title="Modification concurrente" role="alert">
           Cette édition a changé depuis son ouverture. <button type="button" className="font-medium underline" onClick={onReload}>Recharger la version à jour</button>
@@ -105,15 +108,15 @@ function EditionEditor({ row, onReload }: { row: AdminEditionRow; onReload: () =
         <CardTitle>Cycle de publication</CardTitle>
         <p className="text-sm text-ink-muted">Transitions autorisées depuis « {t.editorialStatus[edition.status]} » :</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {EDITORIAL_TRANSITIONS[edition.status].length === 0 && <p className="text-sm">Aucune (état final).</p>}
-          {EDITORIAL_TRANSITIONS[edition.status].map((to) => (
+          {(workspace === "publisher" ? (["draft", "changes_requested"].includes(edition.status) ? ["review" as EditorialStatus] : []) : EDITORIAL_TRANSITIONS[edition.status]).length === 0 && <p className="text-sm">Aucune action disponible dans cet état.</p>}
+          {(workspace === "publisher" ? (["draft", "changes_requested"].includes(edition.status) ? ["review" as EditorialStatus] : []) : EDITORIAL_TRANSITIONS[edition.status]).map((to) => (
             <Button key={to} variant={to === "published" ? "primary" : to === "suspended" || to === "archived" ? "danger" : "outline"} onClick={() => setTransition(to)}>
               {TRANSITION_LABEL[to]}
             </Button>
           ))}
         </div>
         {!edition.asset_id && (
-          <p className="mt-3 text-sm text-caution">Aucun fichier traité : la publication sera refusée. <Link to="/admin/imports" className="font-medium underline">Importer le fichier</Link></p>
+          <p className="mt-3 text-sm text-caution">Aucun fichier traité : la soumission sera refusée. <Link to={workspace === "publisher" ? "/publisher/imports" : "/admin/imports"} className="font-medium underline">Importer le fichier</Link></p>
         )}
         {edition.status === "published" && <p className="mt-3 text-sm"><Link to={`/publications/${publication.slug}`} className="text-brand underline">Voir la fiche publique</Link></p>}
         {move.error && !conflict && transition === null && <div className="mt-3"><InlineError error={move.error} /></div>}

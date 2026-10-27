@@ -15,6 +15,7 @@ import type {
   Conversation,
   ContractDocument,
   EditionInput,
+  EditorialReview,
   EditorialStatus,
   Eligibility,
   Entitlement,
@@ -151,6 +152,8 @@ export interface KiosyApi {
     offerVersions(offerId: string, opts?: RequestOptions): Promise<Offer[]>;
     updateOffer(offerId: string, input: OfferInput & { version: number }): Promise<Offer>;
     imports(opts?: RequestOptions): Promise<ImportJob[]>;
+    publisherReviews(opts?: RequestOptions): Promise<EditorialReview[]>;
+    publisherAnalytics(opts?: RequestOptions): Promise<{ publications: number; editions: number; orders: number; entitlements: number }>;
     uploadImport(input: { file: File; edition_id: string }, opts: MutationOptions): Promise<ImportJob>;
     orders(filter: { status?: string }, opts?: RequestOptions): Promise<(Order & { customer: AdminUserRef })[]>;
     reconcilePayment(orderId: string): Promise<Order>;

@@ -28,6 +28,7 @@ from app.db.models import (
     Conversation,
     DurableTask,
     Edition,
+    EditorialStatus,
     ImportJob,
     Message,
     OutboxEvent,
@@ -405,6 +406,7 @@ def process_ingest(payload: dict[str, Any], claim: ClaimedTask) -> None:
         embedding_provider = embedding_provider_from_settings(settings)
         if (
             chunks
+            and edition.status == EditorialStatus.published
             and edition.permissions.get("ai_indexing")
             and embedding_provider.status().embeddings_configured
         ):
@@ -415,7 +417,7 @@ def process_ingest(payload: dict[str, Any], claim: ClaimedTask) -> None:
                 [item for item in catalog_passages(db) if item.publication_id == publication.id],
                 force=True,
             )
-        elif edition.permissions.get("ai_indexing"):
+        elif edition.status == EditorialStatus.published and edition.permissions.get("ai_indexing"):
             job.warnings = [*job.warnings, "AI_INDEX_SKIPPED: fournisseur d'embeddings non configuré."]
 
         asset = Asset(

@@ -42,6 +42,8 @@ class Role(str, enum.Enum):
 class EditorialStatus(str, enum.Enum):
     draft = "draft"
     review = "review"
+    changes_requested = "changes_requested"
+    approved = "approved"
     published = "published"
     suspended = "suspended"
     archived = "archived"
@@ -164,6 +166,15 @@ class Asset(Base, TimestampMixin):
     sha256: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(30), default="quarantined", index=True)
     download_allowed: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class EditorialReview(Base, TimestampMixin):
+    __tablename__ = "editorial_reviews"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    edition_id: Mapped[str] = mapped_column(ForeignKey("editions.id", ondelete="CASCADE"), index=True)
+    reviewer_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    decision: Mapped[str] = mapped_column(String(30), index=True)
+    comment: Mapped[str] = mapped_column(Text)
 
 
 class Offer(Base, TimestampMixin):

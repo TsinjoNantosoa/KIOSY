@@ -12,7 +12,9 @@ from app.core.errors import DomainError
 from app.core.security import require_roles, utcnow
 from app.db.base import get_db
 from app.db.models import (
+    Asset,
     Edition,
+    EditorialReview,
     EditorialStatus,
     ImportJob,
     Offer,
@@ -32,7 +34,7 @@ router = APIRouter(prefix="/v1/admin")
 
 
 def assert_publisher_scope(user: User, publisher_id: str) -> None:
-    if "admin" not in user.roles and user.publisher_id != publisher_id:
+    if not ({"admin", "manager"} & set(user.roles)) and user.publisher_id != publisher_id:
         raise DomainError(404, "NOT_FOUND", "Ressource introuvable.")
 
 
@@ -41,7 +43,9 @@ def publishers(
     db: Session = Depends(get_db), user: User = Depends(require_roles("publisher", "manager", "admin"))
 ) -> list[dict]:
     statement = select(Publisher).order_by(Publisher.name)
-    if "admin" not in user.roles and user.publisher_id:
+    if not ({"admin", "manager"} & set(user.roles)):
+        if not user.publisher_id:
+            return []
         statement = statement.where(Publisher.id == user.publisher_id)
     return [publisher_out(row) for row in db.scalars(statement)]
 
@@ -104,8 +108,21 @@ def update_publication(
         raise DomainError(404, "NOT_FOUND", "Publication introuvable.")
     assert_publisher_scope(user, row.publisher_id)
     assert_publisher_scope(user, payload.publisher_id)
+    if not ({"admin", "manager"} & set(user.roles)):
+        statuses = set(db.scalars(select(Edition.status).where(Edition.publication_id == row.id)))
+        if statuses - {EditorialStatus.draft, EditorialStatus.changes_requested}:
+            raise DomainError(409, "EDITORIAL_LOCKED", "La publication n'est plus modifiable dans cet état.")
     for field, value in payload.model_dump().items():
         setattr(row, field, value)
+    record_audit(
+        db,
+        action="publication.updated",
+        target_type="publication",
+        target_id=row.id,
+        result="success",
+        request_id="api",
+        actor=user,
+    )
     db.commit()
     return publication_out(row, db.get(Publisher, row.publisher_id))
 
@@ -143,6 +160,17 @@ def create_edition(
     assert_publisher_scope(user, publication.publisher_id)
     edition = make_edition(publication, payload)
     db.add(edition)
+    db.flush()
+    record_audit(
+        db,
+        action="edition.created",
+        target_type="edition",
+        target_id=edition.id,
+        result="success",
+        request_id="api",
+        actor=user,
+        metadata={"publication_id": publication.id},
+    )
     db.commit()
     return {
         "edition": edition_out(edition),
@@ -206,12 +234,27 @@ def update_edition(
     if not row or not publication:
         raise DomainError(404, "NOT_FOUND", "Édition introuvable.")
     assert_publisher_scope(user, publication.publisher_id)
+    if "admin" not in user.roles and row.status not in {
+        EditorialStatus.draft,
+        EditorialStatus.changes_requested,
+    }:
+        raise DomainError(409, "EDITORIAL_LOCKED", "L'édition n'est plus modifiable dans cet état.")
     if row.version != payload["version"]:
         raise DomainError(409, "VERSION_CONFLICT", "L'édition a été modifiée.")
     validated = EditionInput.model_validate({key: payload[key] for key in expected - {"version"}})
     for field, value in validated.model_dump().items():
         setattr(row, field, value)
     row.version += 1
+    record_audit(
+        db,
+        action="edition.updated",
+        target_type="edition",
+        target_id=row.id,
+        result="success",
+        request_id="api",
+        actor=user,
+        metadata={"version": row.version},
+    )
     db.commit()
     return {
         "edition": edition_out(row),
@@ -224,7 +267,7 @@ def transition(
     edition_id: str,
     payload: dict,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles("publisher", "admin")),
+    user: User = Depends(require_roles("publisher", "manager", "admin")),
 ) -> dict:
     if set(payload) != {"to", "version", "reason"}:
         raise DomainError(422, "INVALID_BODY", "Le corps de transition est invalide.")
@@ -237,17 +280,47 @@ def transition(
         raise DomainError(409, "VERSION_CONFLICT", "L'édition a été modifiée.")
     allowed = {
         "draft": {"review", "archived"},
-        "review": {"draft", "published"},
+        "review": {"draft", "changes_requested", "approved", "published"},
+        "changes_requested": {"draft", "review", "archived"},
+        "approved": {"published", "draft", "archived"},
         "published": {"suspended", "archived"},
         "suspended": {"published", "archived"},
         "archived": set(),
     }
+    if "publisher" in user.roles and not ({"admin", "manager"} & set(user.roles)):
+        allowed = {
+            "draft": {"review"},
+            "changes_requested": {"review"},
+            "review": set(),
+            "approved": set(),
+            "published": set(),
+            "suspended": set(),
+            "archived": set(),
+        }
     if payload["to"] not in allowed[row.status.value]:
         raise DomainError(409, "INVALID_TRANSITION", "Cette transition éditoriale est interdite.")
+    if payload["to"] == "review" and (
+        not row.asset_id
+        or not db.scalar(select(Asset.id).where(Asset.id == row.asset_id, Asset.status == "ready"))
+    ):
+        raise DomainError(409, "ASSET_NOT_READY", "Un fichier prêt est requis avant soumission.")
+    if payload["to"] == "changes_requested" and len(str(payload["reason"]).strip()) < 5:
+        raise DomainError(422, "REVIEW_COMMENT_REQUIRED", "Un commentaire de correction est requis.")
+    if payload["to"] == "review" and "publisher" in user.roles and not row.asset_id:
+        raise DomainError(409, "ASSET_NOT_READY", "Un fichier prêt est requis avant soumission.")
     if payload["to"] == "published" and not row.asset_id:
         raise DomainError(409, "ASSET_NOT_READY", "Un fichier prêt est requis avant publication.")
     row.status = EditorialStatus(payload["to"])
     row.version += 1
+    if row.status in {EditorialStatus.changes_requested, EditorialStatus.approved}:
+        db.add(
+            EditorialReview(
+                edition_id=row.id,
+                reviewer_id=user.id,
+                decision=row.status.value,
+                comment=str(payload["reason"]).strip() or "Validation éditoriale",
+            )
+        )
     if row.status == EditorialStatus.published:
         row.availability = {
             "state": "available",
@@ -255,6 +328,11 @@ def transition(
             "rights_valid_until": None,
             "reason": None,
         }
+        for passage in db.scalars(select(RagPassage).where(RagPassage.document_id == row.id)):
+            passage.withdrawn_at = None
+            passage.ai_allowed = bool(row.permissions.get("ai_indexing"))
+        if row.permissions.get("ai_indexing"):
+            enqueue(db, "rag_reindex", {"reason": "edition_published", "edition_id": row.id})
     elif row.status in {EditorialStatus.suspended, EditorialStatus.archived}:
         row.availability = {
             "state": "unavailable",
@@ -270,6 +348,7 @@ def transition(
             select(RagPassage).where(RagPassage.document_id == row.id, RagPassage.withdrawn_at.is_(None))
         ):
             passage.withdrawn_at = utcnow()
+            passage.ai_allowed = False
     record_audit(
         db,
         action=f"edition.transition.{row.status.value}",

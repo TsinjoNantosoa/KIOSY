@@ -8,7 +8,9 @@ import type { EditorialStatus, SubscriptionStatus } from "./models";
 /** CAT04 : transitions éditoriales autorisées. */
 export const EDITORIAL_TRANSITIONS: Record<EditorialStatus, EditorialStatus[]> = {
   draft: ["review"],
-  review: ["published", "draft"],
+  review: ["changes_requested", "approved", "published", "draft"],
+  changes_requested: ["review", "draft"],
+  approved: ["published", "draft"],
   published: ["suspended", "archived"],
   suspended: ["published", "archived"],
   archived: [],

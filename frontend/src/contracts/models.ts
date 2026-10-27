@@ -70,7 +70,7 @@ export interface Publisher {
 // ---------------------------------------------------------------- Catalogue
 
 /** Cycle CAT04 : draft → review → published → suspended | archived. */
-export type EditorialStatus = "draft" | "review" | "published" | "suspended" | "archived";
+export type EditorialStatus = "draft" | "review" | "changes_requested" | "approved" | "published" | "suspended" | "archived";
 
 export interface CoverSpec {
   /** Trois couleurs hexadécimales : fond, encre, accent. */
@@ -618,6 +618,16 @@ export interface OfferInput {
   price_amount: number;
   restrictions: string[];
   status: Extract<OfferStatus, "active" | "unavailable">;
+}
+
+export interface EditorialReview {
+  id: string;
+  edition_id: string;
+  edition_label: string;
+  publication_title: string;
+  decision: "changes_requested" | "approved";
+  comment: string;
+  created_at: ISODateTime;
 }
 
 export interface ContractDocument {

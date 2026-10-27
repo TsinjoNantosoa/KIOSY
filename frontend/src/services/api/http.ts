@@ -244,6 +244,8 @@ export function createHttpApi(): KiosyApi {
       offerVersions: (id, opts) => get(`/v1/admin/offers/${encodeURIComponent(id)}/versions`, { signal: opts?.signal }),
       updateOffer: (id, input) => post(`/v1/admin/offers/${encodeURIComponent(id)}/versions`, { body: input }),
       imports: (opts) => get("/v1/admin/imports", { signal: opts?.signal }),
+      publisherReviews: (opts) => get("/v1/publisher/reviews", { signal: opts?.signal }),
+      publisherAnalytics: (opts) => get("/v1/publisher/analytics", { signal: opts?.signal }),
       uploadImport: (input, opts) => {
         const form = new FormData();
         form.set("file", input.file);

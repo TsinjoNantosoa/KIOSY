@@ -217,7 +217,10 @@ def edition_passages(
             visibility="public" if edition.permissions.get("full_text_public") else "entitled",
             language=edition.language,
             effective_at=edition.published_at,
-            ai_allowed=bool(edition.permissions.get("ai_indexing")),
+            ai_allowed=bool(
+                edition.status == EditorialStatus.published
+                and edition.permissions.get("ai_indexing")
+            ),
             text=chunk,
             metadata={
                 "universe": publication.universe,

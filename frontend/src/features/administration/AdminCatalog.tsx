@@ -16,8 +16,9 @@ import { api } from "@/services/api";
 import { useTimeZone } from "@/features/auth/session";
 import { DataTable, useAdminQuery } from "./shared";
 
-export default function AdminCatalog() {
-  useDocumentTitle(`Catalogue · Administration · ${brand.name}`);
+export default function AdminCatalog({ workspace = "admin" }: { workspace?: "admin" | "publisher" }) {
+  const base = workspace === "publisher" ? "/publisher/publications" : "/admin/catalogue";
+  useDocumentTitle(`Catalogue · ${workspace === "publisher" ? "Espace éditeur" : "Administration"} · ${brand.name}`);
   const tz = useTimeZone();
   const [status, setStatus] = useState<EditorialStatus | "">("");
   const [q, setQ] = useState("");
@@ -26,9 +27,9 @@ export default function AdminCatalog() {
   return (
     <div>
       <PageHeader
-        title="Gestion du catalogue"
-        description="Cycle éditorial : brouillon → à revoir → publié → suspendu ou archivé. Seule l'administration publie au MVP."
-        actions={<ButtonLink to="/admin/catalogue/nouveau" icon={<Plus className="h-4 w-4" aria-hidden />}>Nouvelle publication</ButtonLink>}
+        title={workspace === "publisher" ? "Mes publications" : "Gestion du catalogue"}
+        description={workspace === "publisher" ? "Créez vos brouillons, importez le contenu puis soumettez-le à l'administration." : "Cycle éditorial : brouillon → à revoir → publié → suspendu ou archivé. Seule l'administration publie au MVP."}
+        actions={<ButtonLink to={`${base}/nouveau`} icon={<Plus className="h-4 w-4" aria-hidden />}>Nouvelle publication</ButtonLink>}
       />
       <div className="mb-4 grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[1fr_14rem]">
         <div>
@@ -53,7 +54,7 @@ export default function AdminCatalog() {
           rows={editions.data}
           rowKey={(r) => r.edition.id}
           columns={[
-            { header: "Publication", primary: true, cell: (r) => <Link to={`/admin/catalogue/${r.edition.id}`} className="text-brand hover:underline">{r.publication.title}</Link> },
+            { header: "Publication", primary: true, cell: (r) => <Link to={`${base}/${r.edition.id}`} className="text-brand hover:underline">{r.publication.title}</Link> },
             { header: "Édition", cell: (r) => r.edition.label },
             { header: "Éditeur", cell: (r) => r.publication.publisher.name },
             { header: "Format", cell: (r) => t.format[r.edition.format] },

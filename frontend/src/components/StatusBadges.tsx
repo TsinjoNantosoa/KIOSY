@@ -37,7 +37,7 @@ const subTone: Record<SubscriptionStatus, BadgeTone> = {
   expired: "neutral",
   suspended: "danger",
 };
-const editorialTone: Record<EditorialStatus, BadgeTone> = { draft: "neutral", review: "warning", published: "success", suspended: "danger", archived: "neutral" };
+const editorialTone: Record<EditorialStatus, BadgeTone> = { draft: "neutral", review: "warning", changes_requested: "danger", approved: "success", published: "success", suspended: "danger", archived: "neutral" };
 const proposalTone: Record<ProposalStatus, BadgeTone> = { pending: "warning", confirmed: "success", rejected: "neutral", expired: "neutral", superseded: "neutral", failed: "danger" };
 const runTone: Record<RunStatus, BadgeTone> = { queued: "neutral", running: "info", waiting_user: "warning", waiting_approval: "warning", completed: "success", failed: "danger", cancelled: "neutral" };
 const supportTone: Record<SupportStatus, BadgeTone> = { open: "info", in_progress: "info", waiting_reader: "warning", resolved: "success", closed: "neutral" };
